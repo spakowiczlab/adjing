@@ -1,0 +1,204 @@
+---
+title: "Testing"
+author: "Noah Lepola"
+date: "2023-07-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(randomForest)
+library(ggplot2)
+library(ROCR)
+library(gdata)
+library(vegan)
+library(openxlsx)
+```
+
+```{r}
+#creating data frame of just the nanostring data I need
+
+#Reading it in
+nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 2) %>%
+  drop_na(Sample)
+#removing empty rows
+sampledata <- nano.data %>%
+  select(Sample, PDCD1)
+
+#ADORA2A, BTLA, CD80, CD86, CD96, CD160, CD200R1, CD244, CD274, CD276, CEACAM1, CTLA4, HAVCR2, KIR_Activating_Subgroup_1, KIR_Activating_Subgroup_2, KIR_Inhibiting_Subgroup_1, KIR_Inhibiting_Subgroup_2, LAG3, NECTIN2, PDCD1, PDCD1LG2, PVR, PVRIG, SPN, TIGIT, TNFRSF14, VTCN1
+
+#getting all names to the same format
+sampledata$Sample <-gsub(" ", "-", sampledata$Sample)
+```
+can be more specific using select(-thingsIdon'twant) to take out unwanted it
+Could do something with string manipulation. Regex is very good, look into it
+Intersect tells which they have in common between the two df
+Union combines all for both df
+#drop_na(Sample)
+Have a function with an empty space for the function 
+function(){code that loads data, return(data)}
+```{r}
+#Reading in patient data
+adjing.data <- openxlsx::loadWorkbook("T:/Labs/Spakowicz/mitox/Clinical info/Patient Data 7-1-22.xlsm")
+
+
+#selecting sheet with progressed/treatment completed
+Adj_Datasheet <- readWorkbook(adjing.data, sheet = "Adj Datasheet", startRow = 2)
+
+alting_names <- rename(Adj_Datasheet, Coded.Sample = 52, Drugs = 21, Date.of.treatment = 22)
+
+new_status <- subset(alting_names, Cohort != "Excluded")
+
+#creating dataframes with only sample and progression
+status <- new_status %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`)
+
+#adjusting names to match
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\) *", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\)*", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("- ", "-", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("^\\s+|\\s+$", "", status$`Coded.Sample.#`)
+#removing samples that aren't in nanostring
+status2 <- subset(status, (`Coded.Sample.#` %in% sampledata$Sample)) 
+
+```
+
+```{r}
+k_validate <- function(treatment_outcome, patient_data, seed){
+  set.seed(seed)
+  
+  #Getting progression
+  progression <- subset(status2, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
+   #samples have extra info in Reason.for.discontinuation, filtering it out
+  progression$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", progression$Reason.for.discontinuation)
+    progression$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", progression$Reason.for.discontinuation)
+  #shuffeling
+  progression <- progression[sample(nrow(progression)), ]
+  
+    #Getting completed treatment
+  complete_t <- subset(status2, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+  #shuffeling
+  complete_t <- complete_t[sample(nrow(complete_t)), ]
+
+    # Creating index data frame for the progress/completed to ensure coverage for each group #
+    prog_indexes <- c(rep(1, 5), rep(2, 4), rep(3, 4), rep(4, 4), rep(5, 5))
+    comp_indexes <- c(rep(1, 12), rep(2, 12), rep(3, 12), rep(4, 12), rep(5, 13))
+    out <- list()
+    
+    # Creating testing and training groups #
+    for(i in 1:5){
+      pIndexes <- which(prog_indexes == i, arr.ind = TRUE)
+      cIndexes <- which(comp_indexes == i, arr.ind = TRUE)
+      
+      #Some samples are in the patient data but not nanostring, so it needs to be removed
+      
+      test.outcomes <- rbind(complete_t[cIndexes, ], progression[pIndexes, ])
+      train.outcomes <- rbind(complete_t[-cIndexes, ], progression[-pIndexes, ])
+      
+      test.seq <- sampledata[which(sampledata$Sample %in% test.outcomes$`Coded.Sample.#`), ]
+      test.seq <- test.seq[match(test.outcomes$`Coded.Sample.#`, test.seq$Sample), ]
+      
+      train.seq <- sampledata[which(sampledata$Sample %in% train.outcomes$`Coded.Sample.#`), ]
+      train.seq <- train.seq[match(train.outcomes$`Coded.Sample.#`, train.seq$Sample), ]
+      
+      if(all(train.seq$Sample == train.outcomes$`Coded.Sample.#`) == FALSE){
+        stop("Training Sample_IDs do not match")
+      }
+      if(all(test.seq$Sample == test.outcomes$`Coded.Sample.#`) == FALSE){
+        stop("Testing Sample_IDs do not match")
+      }
+      
+      # Creating the RF model #
+      out[[i]] <- getROC(train.seq, train.outcomes, test.seq, test.outcomes)
+    }
+  
+  
+  avg_auc <- lapply(out, function(x){ x[[1]]})
+  message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_auc))))
+  return(out)
+}
+```
+
+```{r}
+# Function create and test RF model #
+getROC <- function(train, outcomes.train, test, outcomes.test){
+  model.training <- randomForest(x = train[,-1, drop=FALSE], y = as.factor(outcomes.train$Reason.for.discontinuation))
+  test.preds <- predict(model.training, test[,-1, drop=FALSE])
+  
+  print(model.training)
+  # Check variable importance
+  varImpPlot(model.training)
+  # Prediction confusion matrix
+  table(observed = outcomes.test$Reason.for.discontinuation, predicted = test.preds)
+  
+  prediction_for_roc_curve <- predict(model.training,test[,-1, drop=FALSE],type="prob")
+  pred <- prediction(prediction_for_roc_curve[,2], outcomes.test$Reason.for.discontinuation, label.ordering = c("Progression", "Therapy complete"))
+  perf <- performance(pred, "tpr", "fpr")
+  
+  auc_ROCR <- performance(pred, measure = "auc")
+  print(auc_ROCR)
+  auc <- auc_ROCR@y.values[[1]]
+  print(auc)
+  
+  df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
+                   TruePositive=c(perf@y.values[[1]]))
+  out <- list(auc, df)
+  
+  return(out)
+}
+
+```
+
+```{r}
+# Grabbing AUROC values from input models #
+grabVals <- function(input){
+  out <- list()
+  for(i in 1:5){
+    for(j in 1:5){
+      out <- append(out, input[[i]][[j]][[1]])
+    }
+  }
+  out
+}
+```
+
+```{r}
+# Main function call to generate RF models using 5 seeds #
+kTest <- function(outcome, data, seeds){
+  out <- list()
+  for(i in 1:length(seeds)){
+    out[[i]] <- k_validate(outcomes, data, seed = seeds[i])
+  }
+  out <- grabVals(out)
+  
+  # CW edit to function 
+  out <- do.call(rbind.data.frame, out)
+  colnames(out) <- c("AUC")
+  out
+}
+```
+
+```{r}
+seed_list <- c(12345,12346,12347,12348,12349)
+```
+
+```{r}
+#inserting outcomes
+#response <- status %>%
+#    dplyr::filter(Reason.for.discontinuation == "Progression" | Reason.for.discontinuation == #"Therapy complete")
+
+```
+
+
+```{r}
+#Currently working on this
+nano_aucs <- kTest(response, sampledata, seed_list) 
+PDCD1_aucs <- mean(nano_aucs$AUC)
+#tigit_nectin2_pvrig_p16_CD160_grail_
+```
+
+```{r}
+#misc testing block
+```

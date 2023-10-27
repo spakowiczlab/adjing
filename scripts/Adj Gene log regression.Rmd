@@ -1,0 +1,87 @@
+---
+title: "Gene log regression"
+author: "Noah Lepola"
+date: "2023-10-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(openxlsx)
+library(randomForest)
+library(ROCR)
+library(data.table)
+
+```
+
+```{r}
+#creating data frame of just the nanostring data I need
+
+#Reading in nanostring data file
+nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 2) %>%
+  drop_na(Sample)
+
+#removing empty rows
+sampledata <- nano.data %>%
+  select(Sample, Age, ADORA2A:YWHAZ)
+
+#getting all names to the same format
+sampledata$Sample <-gsub(" ", "-", sampledata$Sample)
+```
+
+```{r}
+#Reading in patient data
+adjing.data <- openxlsx::loadWorkbook("T:/Labs/Spakowicz/mitox/Clinical info/Patient Data 7-1-22.xlsm")
+
+
+#selecting sheet with progressed/treatment completed
+Adj_Datasheet <- readWorkbook(adjing.data, sheet = "Adj Datasheet", startRow = 2)
+
+alting_names <- rename(Adj_Datasheet, Coded.Sample = 52, Drugs = 21, Date.of.treatment = 22)
+
+new_status <- subset(alting_names, Cohort != "Excluded")
+
+#creating dataframes with only sample and progression
+status <- new_status %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`)
+
+#adjusting names to match
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\) *", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\)*", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("- ", "-", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("^\\s+|\\s+$", "", status$`Coded.Sample.#`)
+#removing samples that aren't in nanostring
+status2 <- subset(status, (`Coded.Sample.#` %in% sampledata$Sample)) 
+
+```
+
+
+```{r}
+ #Getting progression
+  progression <- subset(status2, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
+   #samples have extra info in Reason.for.discontinuation, filtering it out
+  progression$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", progression$Reason.for.discontinuation)
+    progression$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", progression$Reason.for.discontinuation)
+    #Getting completed treatment
+  complete_t <- subset(status2, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+    
+    
+#merging into one file
+tc.pro.outcomes <- rbind(progression, complete_t)
+#keeping only sampledata with ct or pro
+tc.pro.data <- subset(sampledata, (Sample %in% tc.pro.outcomes$`Coded.Sample.#`))
+#renaming column and merging 
+tc.pro.df <- left_join(tc.pro.outcomes, tc.pro.data, by = join_by("Coded.Sample.#" == "Sample" ))
+#adding numbers for outcome
+tc.pro.df <- tc.pro.df %>% mutate(Outcome = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 0,
+  TRUE ~ 1))
+```
+
+```{r}
+#Logistic regression
+logr_tc_pro <- glm(Outcome ~ . -`Coded.Sample.#` -Age -Reason.for.discontinuation, data=tc.pro.df, family=binomial)
+```

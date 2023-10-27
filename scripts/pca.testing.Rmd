@@ -1,0 +1,172 @@
+---
+title: "PCA nanostring"
+author: "Noah Lepola"
+date: "2023-09-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(openxlsx)
+
+```
+
+```{r}
+#creating data frame of just the nanostring data I need
+
+#Reading it in
+nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 2) %>%
+  drop_na(Sample)
+
+#removing empty rows
+sampledata <- nano.data %>%
+  select(`Sample`, `ADORA2A`:`YWHAZ`)
+  
+
+#getting all names to the same format
+sampledata$Sample <-gsub(" ", "-", sampledata$Sample)
+```
+
+```{r}
+#proof of concept work
+
+#converting sample column to rowname
+Named_samp_data <- column_to_rownames(sampledata, var = "Sample")
+#doing PCA on data
+pca.res <- prcomp(Named_samp_data)
+
+plot(pca.res$x[,1], pca.res$x[,2])
+
+pca.var <- pca.res$sdev^2
+pca.var.per <- round(pca.var/sum(pca.var)*100, 1)
+ 
+barplot(pca.var.per, main="Scree Plot", xlab="Principal Component", ylab="Percent Variation")
+
+
+ 
+##top 10 genes
+loading.scores <- pca.res$rotation[,1]
+gene.scores <- abs(loading.scores) ## get the magnitudes
+gene.score.ranked <- sort(gene.scores, decreasing=TRUE)
+top.10.genes <- names(gene.score.ranked[1:10])
+ 
+ 
+pca.res$rotation[top.10.genes,1]
+```
+
+```{r}
+#Reading in patient data so that responses can be accounted for
+adjing.data <- openxlsx::loadWorkbook("T:/Labs/Spakowicz/mitox/Clinical info/Patient Data 7-1-22.xlsm")
+
+
+#selecting sheet with progressed/treatment completed
+Adj_Datasheet <- readWorkbook(adjing.data, sheet = "Adj Datasheet", startRow = 2)
+
+alting_names <- rename(Adj_Datasheet, Coded.Sample = 52, Drugs = 21, Date.of.treatment = 22)
+
+new_status <- subset(alting_names, Cohort != "Excluded")
+
+#creating dataframes with only sample and progression
+status <- new_status %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`)
+
+#adjusting names to match
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\) *", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\)*", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("- ", "-", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("^\\s+|\\s+$", "", status$`Coded.Sample.#`)
+#removing samples that aren't in nanostring
+status2 <- subset(status, (`Coded.Sample.#` %in% sampledata$Sample)) 
+
+```
+
+```{r}
+#pca with only progression and therapy complete
+  progression <- subset(status2, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
+   #samples have extra info in Reason.for.discontinuation, filtering it out
+  progression$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", progression$Reason.for.discontinuation)
+    progression$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", progression$Reason.for.discontinuation)
+
+  
+    #Getting completed treatment
+  complete_t <- subset(status2, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+#combining pro and ct
+pro.and.ct <- rbind(complete_t, progression)
+#limiting sample data to only pro and ct
+pro.ct.sampledata <- subset(sampledata, (Sample %in% pro.and.ct$`Coded.Sample.#`))
+
+#converting sample column to rowname
+Nameddata.pro.ct <- column_to_rownames(pro.ct.sampledata, var = "Sample")
+#doing PCA on data
+pca.res.pro.ct <- prcomp(Nameddata.pro.ct)
+
+plot(pca.res.pro.ct$x[,1], pca.res.pro.ct$x[,2])
+#comparing impact of different PCAs
+pca.var.pro.ct <- pca.res.pro.ct$sdev^2
+pca.var.per.pro.ct <- round(pca.var.pro.ct/sum(pca.var.pro.ct)*100, 1)
+ 
+barplot(pca.var.per.pro.ct, main="Scree Plot", xlab="Principal Component", ylab="Percent Variation")
+#getting top 10 genes
+loading.scores.pro.ct <- pca.res.pro.ct$rotation[,1]
+gene.scores.pro.ct <- abs(loading.scores.pro.ct) ## get the magnitudes
+gene.score.ranked.pro.ct <- sort(gene.scores.pro.ct, decreasing=TRUE)
+top.10.genes.pro.ct <- names(gene.score.ranked.pro.ct[1:10])
+ 
+ 
+pca.res.pro.ct$rotation[top.10.genes.pro.ct,1]
+
+pca.data <- data.frame(Sample=rownames(pca.res$x),
+  X=pca.res$x[,1],
+  Y=pca.res$x[,2])
+
+ggplot(data=pca.data, aes(x=X, y=Y, label=Sample)) +
+  geom_text() +
+  xlab(paste("PC1 - ", pca.var.per[1], "%", sep="")) +
+  ylab(paste("PC2 - ", pca.var.per[2], "%", sep="")) +
+  theme_bw() +
+  ggtitle("PCA Graph")
+```
+
+```{r}
+#pca with only toxicity and therapy complete
+    #Getting toxicity
+tox <- subset(status2, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
+#removing extra information and correcting spelling
+tox$Reason.for.discontinuation <- gsub( " */*Intolerance", "", tox$Reason.for.discontinuation)
+tox$Reason.for.discontinuation <- gsub( " */ *", "", tox$Reason.for.discontinuation)
+tox$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", tox$Reason.for.discontinuation)
+tox$Reason.for.discontinuation <- gsub( " *\\(.*?\\)*", "", tox$Reason.for.discontinuation)
+tox$Reason.for.discontinuation <-gsub("- ", "-", tox$Reason.for.discontinuation)
+tox$Reason.for.discontinuation <-gsub("^\\s+|\\s+$", "", tox$Reason.for.discontinuation)
+tox$Reason.for.discontinuation <-gsub("Toxcity", "Toxicity", tox$Reason.for.discontinuation)
+
+  
+    #Getting completed treatment
+  complete_t <- subset(status2, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+#combining pro and ct
+tox.and.ct <- rbind(complete_t, tox)
+#limiting sample data to only tox and ct
+tox.ct.sampledata <- subset(sampledata, (Sample %in% tox.and.ct$`Coded.Sample.#`))
+
+#converting sample column to rowname
+Nameddata.tox.ct <- column_to_rownames(tox.ct.sampledata, var = "Sample")
+#doing PCA on data
+pca.res.tox.ct <- prcomp(Nameddata.tox.ct)
+
+plot(pca.res.tox.ct$x[,1], pca.res.tox.ct$x[,2])
+#comparing impact of different PCAs
+pca.var.tox.ct <- pca.res.tox.ct$sdev^2
+pca.var.per.tox.ct <- round(pca.var.tox.ct/sum(pca.var.tox.ct)*100, 1)
+ 
+barplot(pca.var.per.tox.ct, main="Scree Plot", xlab="Principal Component", ylab="Percent Variation")
+#getting top 10 genes
+loading.scores.tox.ct <- pca.res.tox.ct$rotation[,1]
+gene.scores.tox.ct <- abs(loading.scores.tox.ct) ## get the magnitudes
+gene.score.ranked.tox.ct <- sort(gene.scores.tox.ct, decreasing=TRUE)
+top.10.genes.tox.ct <- names(gene.score.ranked.tox.ct[1:10])
+ 
+ 
+pca.res.tox.ct$rotation[top.10.genes.tox.ct,1]
+```
