@@ -25,6 +25,7 @@ nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Bur
   drop_na(Sample)
 
 #removing empty rows
+# This should have 81 columns (79 genes)
 sampledata <- nano.data %>%
   select(Sample, Age, ADORA2A:YWHAZ)
 
@@ -74,7 +75,7 @@ tc.pro.outcomes <- rbind(progression, complete_t)
 #keeping only sampledata with ct or pro
 tc.pro.data <- subset(sampledata, (Sample %in% tc.pro.outcomes$`Coded.Sample.#`))
 #renaming column and merging 
-tc.pro.df <- left_join(tc.pro.outcomes, tc.pro.data, by = join_by("Coded.Sample.#" == "Sample" ))
+tc.pro.df <- left_join(tc.pro.outcomes, tc.pro.data, by = c("Coded.Sample.#" = "Sample" ))
 #adding numbers for outcome
 tc.pro.df <- tc.pro.df %>% mutate(Outcome = case_when(
   Reason.for.discontinuation == "Therapy complete" ~ 0,
@@ -85,3 +86,30 @@ tc.pro.df <- tc.pro.df %>% mutate(Outcome = case_when(
 #Logistic regression
 logr_tc_pro <- glm(Outcome ~ . -`Coded.Sample.#` -Age -Reason.for.discontinuation, data=tc.pro.df, family=binomial)
 ```
+
+```{r}
+summary(logr_tc_pro)
+```
+
+```{r}
+# Get a vector of gene names
+# genes <- 
+
+#create dataframe to store the output 
+# out <- dataframe(gene = genes,
+                   # estimate = NA,
+                   # p.value = NA)
+
+# for (g in 1:length(genes)) {
+  # tmp <- glm(Outcome ~ g, data = whatever)
+  # tmpdf <- broom::tidy(tmp)
+  #retrieve the line of interest with g, estimate, and p-value
+  # out$estimate[g] <- tmdf$estimate[2]
+  
+#}
+# out %>%
+#   mutate(FDR = p.adjust(p.value)
+# Consider visualization with x = estimate and y = -log(FDR)
+# Consider adding the log2fc (going back to the values in tc.pro.df)
+```
+
