@@ -1,0 +1,104 @@
+---
+title: "Data calling and age difference for adjing"
+author: "Noah Lepola"
+date: "2024-01-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+```
+
+
+```{r}
+#creating data frame of just the nanostring data I need
+
+#Reading in nanostring data file
+nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 2) %>%
+  drop_na(Sample)
+
+#removing empty rows ADORA2A:YWHAZ , Therapy, `Stage (7th ed.) prior to therapy`
+sampledata <- nano.data %>%
+  select(Sample, Age, ADORA2A:YWHAZ)
+
+#getting all names to the same format
+sampledata$Sample <-gsub(" ", "-", sampledata$Sample)
+```
+can be more specific using select(-thingsIdon'twant) to take out unwanted it
+Could do something with string manipulation. Regex is very good, look into it
+Intersect tells which they have in common between the two df
+Union combines all for both df
+#drop_na(Sample)
+Have a function with an empty space for the function 
+function(){code that loads data, return(data)}
+```{r}
+#Reading in patient data
+adjing.data <- openxlsx::loadWorkbook("T:/Labs/Spakowicz/mitox/Clinical info/Patient Data 7-1-22.xlsm")
+
+
+#selecting sheet with progressed/treatment completed
+Adj_Datasheet <- readWorkbook(adjing.data, sheet = "Adj Datasheet", startRow = 2)
+
+alting_names <- rename(Adj_Datasheet, Coded.Sample = 52, Drugs = 21, Date.of.treatment = 22)
+
+new_status <- subset(alting_names, Cohort != "Excluded")
+
+#creating dataframes with only sample and progression
+status <- new_status %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`)
+
+#adjusting names to match
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\) *", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\)*", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("- ", "-", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("^\\s+|\\s+$", "", status$`Coded.Sample.#`)
+#removing samples that aren't in nanostring
+status2 <- subset(status, (`Coded.Sample.#` %in% sampledata$Sample)) 
+
+```
+
+```{r}
+#reading in age file
+age.file <- read.xlsx(("T:/Labs/Burd/CEBurd lab/Noah Lepola/Adjuvant Melanoma Paper/Adj age correction.xlsx"))
+#renaming genes to match what is in nanostring
+gene_list <- colnames(sampledata)
+age.file[age.file == "CD45RO"] <- "PTPRC_1"
+age.file[age.file == "CD45RA"] <- "PTPRC_2"
+age.file[age.file == "CD45RB"] <- "PTPRC_3"
+
+age.file2 <- subset(age.file, (Gene %in% gene_list))
+```
+
+
+```{r}
+#formatting so files can be combined
+long.data <- sampledata %>% 
+  pivot_longer(
+    cols = ADORA2A:YWHAZ, 
+    names_to = "Gene", 
+    values_to = "Value"
+  )
+#combining patient data with age averages
+long.data2 <- merge(long.data, age.file2, by = "Gene")
+#creating predicted values
+long.data2 <- long.data2 %>%
+  mutate(
+    Expected = (Age * Slope) + Intercept,
+  )
+#Difference between observed and expected
+long.data2 <- long.data2 %>%
+  mutate(
+    Difference = Expected - Value,
+  )
+#Selecting only columns to be used in rf model
+long.data3 <- long.data2 %>% dplyr::select(Sample, Gene, Difference) 
+#converting to format usable by rf
+age.diff <- long.data3 %>% 
+  pivot_wider(names_from = Gene, values_from = Difference)
+
+```
+
+
