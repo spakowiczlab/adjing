@@ -1,0 +1,192 @@
+---
+title: "adj_cohort_split_tox_allgene_chr"
+author: "Noah Lepola"
+date: "2024-06-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+knitr::opts_knit$set(root.dir = "T:/Labs/Burd/CEBurd Lab/Noah Lepola/Coding/my adjing work folder/Scripts for paper/Saved files for paper")
+
+
+```
+
+```{r}
+load(file = "adj_val_cohort")
+load(file = "adj_cohort")
+load(file = "g.and.c.data")
+
+```
+
+
+top 10 genes by log regression TNFRSF18, VTCN1, NECTIN2, AHR, FOXO1, CCR4, RUNX3, `IL-2`, CD28, TIGIT
+top ten genes by log regression using only Adj (exploratory) cohort PDCD1LG2, NECTIN2, `KIR_Inhibiting_Subgroup_2`, RUNX3, CDKN1B, B3GAT1, HPRT1, HAVCR2, `PTPRC_1`, `IL-10`
+top ten genes by log regression using only Adj (exploratory) cohort NECTIN2, `KIR_Inhibiting_Subgroup_2`, CDKN1B, HAVCR2, B3GAT1, RUNX3, PDCD1LG2, `IL-10`, TBX21, `PTPRC_1`
+
+```{r}
+tox.tgc <- g.and.c.data %>%
+  select(Sample,  ADORA2A:YWHAZ, Therapy, `BMI (kg/m2)`, `Platelets (K/uL)`, `LDH (U/L)`)
+
+```
+
+```{r}
+k_validate <- function(treatment_outcome, patient_data, seed){
+  set.seed(seed)
+  
+  #Getting toxicity
+  toxicity_val <- subset(adj_val_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
+  
+  toxicity_adj <- subset(adj_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
+    
+   #removing extra information and correcting spelling
+   toxicity_val$Reason.for.discontinuation <- gsub( " */*Intolerance", "",  toxicity_val$Reason.for.discontinuation)
+   toxicity_val$Reason.for.discontinuation <- gsub( " */ *", "",  toxicity_val$Reason.for.discontinuation)
+   toxicity_val$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "",  toxicity_val$Reason.for.discontinuation)
+   toxicity_val$Reason.for.discontinuation <- gsub( " *\\(.*?\\)*", "",  toxicity_val$Reason.for.discontinuation)
+   toxicity_val$Reason.for.discontinuation <-gsub("- ", "-",  toxicity_val$Reason.for.discontinuation)
+   toxicity_val$Reason.for.discontinuation <-gsub("^\\s+|\\s+$", "",  toxicity_val$Reason.for.discontinuation)
+   toxicity_val$Reason.for.discontinuation <-gsub("Toxcity", "Toxicity",  toxicity_val$Reason.for.discontinuation)
+  
+  toxicity_adj$Reason.for.discontinuation <- gsub( " */*Intolerance", "", toxicity_adj$Reason.for.discontinuation)
+  toxicity_adj$Reason.for.discontinuation <- gsub( " */ *", "", toxicity_adj$Reason.for.discontinuation)
+  toxicity_adj$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", toxicity_adj$Reason.for.discontinuation)
+  toxicity_adj$Reason.for.discontinuation <- gsub( " *\\(.*?\\)*", "", toxicity_adj$Reason.for.discontinuation)
+  toxicity_adj$Reason.for.discontinuation <-gsub("- ", "-", toxicity_adj$Reason.for.discontinuation)
+  toxicity_adj$Reason.for.discontinuation <-gsub("^\\s+|\\s+$", "", toxicity_adj$Reason.for.discontinuation)
+  toxicity_adj$Reason.for.discontinuation <-gsub("Toxcity", "Toxicity", toxicity_adj$Reason.for.discontinuation)
+
+
+   #shuffling
+  toxicity_val <- toxicity_val[sample(nrow(toxicity_val)), ]
+  
+  toxicity_adj <- toxicity_adj[sample(nrow(toxicity_adj)), ]
+  
+    #Getting completed treatment
+  complete_t_val <- subset(adj_val_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+  
+  complete_t_adj <- subset(adj_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+  
+  #shuffling
+  complete_t_val <- complete_t_val[sample(nrow(complete_t_val)), ]
+  
+  complete_t_adj <- complete_t_adj[sample(nrow(complete_t_adj)), ]
+
+    # Creating index data frame for the toxicity/completed to ensure coverage for each group #baseline is .7619
+    tox_indexes_val <- c(rep(1, 3), rep(2, 2), rep(3, 3), rep(4, 2), rep(5, 3))
+    comp_indexes_val <- c(rep(1, 6), rep(2, 6), rep(3, 5), rep(4, 6), rep(5, 6))
+    tox_indexes_adj <- c(rep(1, 2), rep(2, 2), rep(3, 2), rep(4, 2), rep(5, 2))
+    comp_indexes_adj <- c(rep(1, 6), rep(2, 7), rep(3, 6), rep(4, 7), rep(5, 6))
+    out <- list()
+    
+    # Creating testing and training groups #
+    for(i in 1:5){
+      pIndexes_val <- which(tox_indexes_val == i, arr.ind = TRUE)
+      cIndexes_val <- which(comp_indexes_val == i, arr.ind = TRUE)
+      pIndexes_adj <- which(tox_indexes_adj == i, arr.ind = TRUE)
+      cIndexes_adj <- which(comp_indexes_adj == i, arr.ind = TRUE)
+      
+      test.outcomes <- rbind(complete_t_val[cIndexes_val, ], toxicity_val[pIndexes_val, ])
+      train.outcomes <- rbind(complete_t_adj[cIndexes_adj, ], toxicity_adj[pIndexes_adj, ])
+      
+      test.seq <- tox.tgc[which(tox.tgc$Sample %in% test.outcomes$`Coded.Sample.#`), ]
+      test.seq <- test.seq[match(test.outcomes$`Coded.Sample.#`, test.seq$Sample), ]
+      
+      train.seq <- tox.tgc[which(tox.tgc$Sample %in% train.outcomes$`Coded.Sample.#`), ]
+      train.seq <- train.seq[match(train.outcomes$`Coded.Sample.#`, train.seq$Sample), ]
+      
+      if(all(train.seq$Sample == train.outcomes$`Coded.Sample.#`) == FALSE){
+        stop("Training Sample_IDs do not match")
+      }
+      if(all(test.seq$Sample == test.outcomes$`Coded.Sample.#`) == FALSE){
+        stop("Testing Sample_IDs do not match")
+      }
+      
+      # Creating the RF model #
+      out[[i]] <- getROC(train.seq, train.outcomes, test.seq, test.outcomes)
+    }
+  
+  
+  avg_aucpr <- lapply(out, function(x){ x[[1]]})
+  message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_aucpr))))
+  return(out)
+}
+```
+
+```{r}
+# Function create and test RF model #
+getROC <- function(train, outcomes.train, test, outcomes.test){
+  model.training <- randomForest(x = train[,-1, drop=FALSE], y = as.factor(outcomes.train$Reason.for.discontinuation))
+  test.preds <- predict(model.training, test[,-1, drop=FALSE])
+  
+  print(model.training)
+  # Check variable importance
+  varImpPlot(model.training)
+  # Prediction confusion matrix
+  table(observed = outcomes.test$Reason.for.discontinuation, predicted = test.preds)
+  
+  prediction_for_roc_curve <- predict(model.training,test[,-1, drop=FALSE],type="prob")
+  pred <- prediction(prediction_for_roc_curve[,2], outcomes.test$Reason.for.discontinuation, label.ordering = c("Therapy complete", "Toxicity"))
+  perf <- performance(pred, "tpr", "fpr")
+  
+  aucpr_ROCR <- performance(pred, measure = "aucpr")
+  print(aucpr_ROCR)
+  aucpr <- aucpr_ROCR@y.values[[1]]
+  print(aucpr)
+  
+  df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
+                   TruePositive=c(perf@y.values[[1]]))
+  out <- list(aucpr, df)
+  
+  return(out)
+}
+
+```
+
+```{r}
+# Grabbing AUROC values from input models #
+grabVals <- function(input){
+  out <- list()
+  for(i in 1:5){
+    for(j in 1:5){
+      out <- append(out, input[[i]][[j]][[1]])
+    }
+  }
+  out
+}
+```
+
+```{r}
+# Main function call to generate RF models using 5 seeds #
+kTest <- function(outcome, data, seeds){
+  out <- list()
+  for(i in 1:length(seeds)){
+    out[[i]] <- k_validate(outcomes, data, seed = seeds[i])
+  }
+  out <- grabVals(out)
+  
+  # CW edit to function 
+  out <- do.call(rbind.data.frame, out)
+  colnames(out) <- c("AUCPR")
+  out
+}
+```
+
+```{r}
+seed_list <- c(12345,12346,12347,12348,12349)
+```
+
+```{r}
+#Currently working on this
+r_tox_split_allgene_chr_aucprs <- kTest(response, tox.tgc, seed_list) 
+r_tox_split_allgene_chr_aucprs_avg <- mean(r_tox_split_allgene_chr_aucprs$AUCPR)
+save(r_tox_split_allgene_chr_aucprs, file = "r_tox_split_allgene_chr_aucprs")
+r_tox_split_allgene_chr_aucprs_avg
+
+```

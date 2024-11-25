@@ -1,0 +1,184 @@
+---
+title: "adjing_cohort_split_rec_top"
+author: "Noah Lepola"
+date: "2024-06-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+knitr::opts_knit$set(root.dir = "T:/Labs/Burd/CEBurd Lab/Noah Lepola/Coding/my adjing work folder/Scripts for paper/Saved files for paper")
+
+
+```
+
+```{r}
+load(file = "adj_val_cohort")
+load(file = "adj_cohort")
+load(file = "sampledata")
+
+```
+
+
+top ten genes by log regression VTCN1, CD160, GZMB, AHR, `IL-17A`, FOXO1, ITCH, BCL6, PVRIG, CD27
+top 15 genes by log regression using only Adj (exploratory) cohort CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3, ZBTB7B, GZMB, CD160
+
+```{r}
+#limiting to just top differential genes
+
+rec_top <- sampledata %>%
+  select(Sample,  CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244)
+
+```
+
+
+```{r}
+k_validate <- function(treatment_outcome, patient_data, seed){
+  set.seed(seed)
+  
+  #Getting progression
+  progression_val <- subset(adj_val_cohort, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
+  
+  progression_adj <- subset(adj_cohort, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
+    
+   #samples have extra info in Reason.for.discontinuation, filtering it out
+    
+  progression_val$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", progression_val$Reason.for.discontinuation)
+  progression_val$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", progression_val$Reason.for.discontinuation)
+  
+  progression_adj$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", progression_adj$Reason.for.discontinuation)
+  progression_adj$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", progression_adj$Reason.for.discontinuation)
+ 
+   #shuffeling
+  progression_val <- progression_val[sample(nrow(progression_val)), ]
+  
+  progression_adj <- progression_adj[sample(nrow(progression_adj)), ]
+  
+    #Getting completed treatment
+  complete_t_val <- subset(adj_val_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+  
+  complete_t_adj <- subset(adj_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+  
+  #shuffeling
+  complete_t_val <- complete_t_val[sample(nrow(complete_t_val)), ]
+  
+  complete_t_adj <- complete_t_adj[sample(nrow(complete_t_adj)), ]
+
+    # Creating index data frame for the progress/completed to ensure coverage for each group #baseline 0.7272
+    prog_indexes_val <- c(rep(1, 2), rep(2, 2), rep(3, 2), rep(4, 2), rep(5, 2))
+    comp_indexes_val <- c(rep(1, 6), rep(2, 6), rep(3, 5), rep(4, 6), rep(5, 6))
+    prog_indexes_adj <- c(rep(1, 2), rep(2, 3), rep(3, 2), rep(4, 3), rep(5, 2))
+    comp_indexes_adj <- c(rep(1, 6), rep(2, 7), rep(3, 6), rep(4, 7), rep(5, 6))
+    out <- list()
+    
+    # Creating testing and training groups #
+    for(i in 1:5){
+      pIndexes_val <- which(prog_indexes_val == i, arr.ind = TRUE)
+      cIndexes_val <- which(comp_indexes_val == i, arr.ind = TRUE)
+      pIndexes_adj <- which(prog_indexes_adj == i, arr.ind = TRUE)
+      cIndexes_adj <- which(comp_indexes_adj == i, arr.ind = TRUE)
+      
+      test.outcomes <- rbind(complete_t_val[cIndexes_val, ], progression_val[pIndexes_val, ])
+      train.outcomes <- rbind(complete_t_adj[cIndexes_adj, ], progression_adj[pIndexes_adj, ])
+      
+      test.seq <- rec_top[which(rec_top$Sample %in% test.outcomes$`Coded.Sample.#`), ]
+      test.seq <- test.seq[match(test.outcomes$`Coded.Sample.#`, test.seq$Sample), ]
+      
+      train.seq <- rec_top[which(rec_top$Sample %in% train.outcomes$`Coded.Sample.#`), ]
+      train.seq <- train.seq[match(train.outcomes$`Coded.Sample.#`, train.seq$Sample), ]
+      
+      if(all(train.seq$Sample == train.outcomes$`Coded.Sample.#`) == FALSE){
+        stop("Training Sample_IDs do not match")
+      }
+      if(all(test.seq$Sample == test.outcomes$`Coded.Sample.#`) == FALSE){
+        stop("Testing Sample_IDs do not match")
+      }
+      
+      # Creating the RF model #
+      out[[i]] <- getROC(train.seq, train.outcomes, test.seq, test.outcomes)
+    }
+  
+  
+  avg_aucpr <- lapply(out, function(x){ x[[1]]})
+  message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_aucpr))))
+  return(out)
+}
+```
+
+```{r}
+# Function create and test RF model #
+getROC <- function(train, outcomes.train, test, outcomes.test){
+  model.training <- randomForest(x = train[,-1, drop=FALSE], y = as.factor(outcomes.train$Reason.for.discontinuation))
+  test.preds <- predict(model.training, test[,-1, drop=FALSE])
+  
+  print(model.training)
+  # Check variable importance
+  varImpPlot(model.training)
+  # Prediction confusion matrix
+  table(observed = outcomes.test$Reason.for.discontinuation, predicted = test.preds)
+  
+  prediction_for_roc_curve <- predict(model.training,test[,-1, drop=FALSE],type="prob")
+  pred <- prediction(prediction_for_roc_curve[,2], outcomes.test$Reason.for.discontinuation, label.ordering = c("Therapy complete", "Progression"))
+  perf <- performance(pred, "tpr", "fpr")
+  
+  aucpr_ROCR <- performance(pred, measure = "aucpr")
+  print(aucpr_ROCR)
+  aucpr <- aucpr_ROCR@y.values[[1]]
+  print(aucpr)
+  
+  df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
+                   TruePositive=c(perf@y.values[[1]]))
+  out <- list(aucpr, df)
+  
+  return(out)
+}
+
+```
+
+```{r}
+# Grabbing AUROC values from input models #
+grabVals <- function(input){
+  out <- list()
+  for(i in 1:5){
+    for(j in 1:5){
+      out <- append(out, input[[i]][[j]][[1]])
+    }
+  }
+  out
+}
+```
+
+```{r}
+# Main function call to generate RF models using 5 seeds #
+kTest <- function(outcome, data, seeds){
+  out <- list()
+  for(i in 1:length(seeds)){
+    out[[i]] <- k_validate(outcomes, data, seed = seeds[i])
+  }
+  out <- grabVals(out)
+  
+  # CW edit to function 
+  out <- do.call(rbind.data.frame, out)
+  colnames(out) <- c("AUCPR")
+  out
+}
+```
+
+```{r}
+seed_list <- c(12345,12346,12347,12348,12349)
+```
+
+```{r}
+#Currently working on this
+r_rec_split_top11_aucprs <- kTest(response, rec_top, seed_list) 
+r_rec_split_top11_aucprs_avg <- mean(r_rec_split_top11_aucprs$AUCPR)
+save(r_rec_split_top11_aucprs, file = "r_rec_split_top11_aucprs")
+r_rec_split_top11_aucprs_avg
+
+```
