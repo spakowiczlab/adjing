@@ -37,11 +37,18 @@ tox.tgc <- g.and.c.data %>%
 ```
 
 ```{r}
+seed <- 12345
+
 k_validate <- function(treatment_outcome, patient_data, seed){
   set.seed(seed)
   
   #Getting toxicity
-  toxicity_val <- subset(adj_val_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
+  # toxicity_val <- 
+  #   adj_val_cohort %>% 
+  #   filter(grepl("Tox", Reason.for.discontinuation))
+  # 
+  
+  toxicity_val <- subset(adj_val_cohort, grepl("Tox", Reason.for.discontinuation))
   
   toxicity_adj <- subset(adj_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
     
@@ -151,14 +158,16 @@ getROC <- function(train, outcomes.train, test, outcomes.test){
 
 ```{r}
 # Grabbing AUROC values from input models #
-grabVals <- function(input){
-  out <- list()
-  for(i in 1:25){
+input <- out
+
+grabVals <- function(input, seeds){
+  tmp <- list()
+  for(i in 1:length(seeds)){
     for(j in 1:1){
-      out <- append(out, input[[i]][[j]][[1]])
+      tmp <- append(tmp, input[[i]][[j]][[1]])
     }
   }
-  out
+  tmp
 }
 ```
 
@@ -167,9 +176,9 @@ grabVals <- function(input){
 kTest <- function(outcome, data, seeds){
   out <- list()
   for(i in 1:length(seeds)){
-    out[[i]] <- k_validate(outcomes, data, seed = seeds[i])
+    out[[i]] <- k_validate(outcome, data, seed = seeds[i])
   }
-  out <- grabVals(out)
+  out <- grabVals(out, seeds)
   
   # CW edit to function 
   out <- do.call(rbind.data.frame, out)
