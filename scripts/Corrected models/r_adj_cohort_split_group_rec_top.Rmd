@@ -13,15 +13,18 @@ library(ggplot2)
 library(randomForest)
 library(ROCR)
 
-knitr::opts_knit$set(root.dir = "T:/Labs/Burd/CEBurd Lab/Noah Lepola/Coding/my adjing work folder/Scripts for paper/Saved files for paper")
 
 
 ```
 
 ```{r}
-load(file = "adj_val_cohort")
-load(file = "adj_cohort")
-load(file = "sampledata")
+load(file = "../Outputs/progression_val")
+load(file = "../Outputs/complete_t_val")
+
+load(file = "../Outputs/progression_adj")
+load(file = "../Outputs/complete_t_adj")
+
+load(file = "../Outputs/rec_top")
 
 ```
 
@@ -29,43 +32,18 @@ load(file = "sampledata")
 top ten genes by log regression VTCN1, CD160, GZMB, AHR, `IL-17A`, FOXO1, ITCH, BCL6, PVRIG, CD27
 top 15 genes by log regression using only Adj (exploratory) cohort CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3, ZBTB7B, GZMB, CD160
 
-```{r}
-#limiting to just top differential genes
-
-rec_top <- sampledata %>%
-  select(Sample,  CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3)
-
-```
-
 
 ```{r}
 k_validate <- function(treatment_outcome, patient_data, seed){
   set.seed(seed)
   
-  #Getting progression
-  progression_val <- subset(adj_val_cohort, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
-  
-  progression_adj <- subset(adj_cohort, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
-    
-   #samples have extra info in Reason.for.discontinuation, filtering it out
-    
-  progression_val$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", progression_val$Reason.for.discontinuation)
-  progression_val$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", progression_val$Reason.for.discontinuation)
-  
-  progression_adj$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", progression_adj$Reason.for.discontinuation)
-  progression_adj$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", progression_adj$Reason.for.discontinuation)
- 
-   #shuffeling
+   #shuffling
   progression_val <- progression_val[sample(nrow(progression_val)), ]
   
   progression_adj <- progression_adj[sample(nrow(progression_adj)), ]
   
-    #Getting completed treatment
-  complete_t_val <- subset(adj_val_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
-  
-  complete_t_adj <- subset(adj_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
-  
-  #shuffeling
+
+  #shuffling
   complete_t_val <- complete_t_val[sample(nrow(complete_t_val)), ]
   
   complete_t_adj <- complete_t_adj[sample(nrow(complete_t_adj)), ]
@@ -179,10 +157,10 @@ seed_list <- c(12345,12346,12347,12348,12349,12350,12351,12352,12353,12354,12355
 #Currently working on this
 
 
-r_rec_split_top11_group_aucprs <- kTest(response, rec_top, seed_list) 
-r_rec_split_top11_group_aucprs_avg <- mean(r_rec_split_top11_group_aucprs$AUCPR)
-#save(r_rec_split_top11_aucprs, file = "r_rec_split_top11_aucprs")
-r_rec_split_top11_group_aucprs_avg
+r_rec_split_top12_group_aucprs <- kTest(response, rec_top, seed_list) 
+r_rec_split_top12_group_aucprs_avg <- mean(r_rec_split_top12_group_aucprs$AUCPR)
+save(r_rec_split_top12_group_aucprs, file = "../Outputs/r_rec_split_top12_group_aucprs")
+r_rec_split_top12_group_aucprs_avg
 
 ```
 

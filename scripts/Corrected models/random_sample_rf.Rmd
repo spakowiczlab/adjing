@@ -13,21 +13,27 @@ library(ggplot2)
 library(randomForest)
 library(ROCR)
 
-knitr::opts_knit$set(root.dir = "T:/Labs/Burd/CEBurd Lab/Noah Lepola/Coding/my adjing work folder/Scripts for paper/Saved files for paper")
 
 
 ```
 
 ```{r}
-load(file = "adj_val_cohort")
-load(file = "adj_cohort")
-load(file = "sampledata")
+load(file = "../Outputs/progression_val")
+load(file = "../Outputs/complete_t_val")
+
+load(file = "../Outputs/progression_adj")
+load(file = "../Outputs/complete_t_adj")
+
+load(file = "../Outputs/sampledata")
 
 ```
 
 ```{r}
-adj_cohort$random.outcome<- (sample(adj_cohort$Reason.for.discontinuation))
-adj_val_cohort$random.outcome<- (sample(adj_val_cohort$Reason.for.discontinuation))
+progression_val$random.outcome<- (sample(progression_val$Reason.for.discontinuation))
+progression_adj$random.outcome<- (sample(progression_adj$Reason.for.discontinuation))
+complete_t_val$random.outcome<- (sample(complete_t_val$Reason.for.discontinuation))
+complete_t_adj$random.outcome<- (sample(complete_t_adj$Reason.for.discontinuation))
+
 
 ```
 
@@ -171,7 +177,7 @@ seed_list <- c(12345,12346,12347,12348,12349,12350,12351,12352,12353,12354,12355
 #Currently working on this
 r_random_rec_split_group_aucprs <- kTest(response, sampledata, seed_list) 
 r_random_rec_split_group_aucprs_avg <- mean(r_random_rec_split_group_aucprs$AUCPR)
-#save(r_random_rec_split_group_aucprs, file = "r_random_rec_split_group_aucprs")
+#save(r_random_rec_split_group_aucprs, file = "../Outputs/r_random_rec_split_group_aucprs")
 r_random_rec_split_group_aucprs_avg
 
 ```

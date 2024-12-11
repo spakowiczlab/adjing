@@ -1,0 +1,245 @@
+---
+title: "Data calling for adjing"
+author: "Noah Lepola"
+date: "2024-01-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+
+knitr::opts_knit$set(root.dir = "T:/Labs/Burd/CEBurd Lab/Noah Lepola/Coding/mGithub/adjing/scripts/Outputs")
+
+
+```
+
+
+```{r}
+#creating data frame of just the nanostring data I need
+
+#Reading in nanostring data file
+nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 2) %>%
+  drop_na(Sample)
+
+#getting all names to the same format
+nano.data$Sample <-gsub(" ", "-", nano.data$Sample)
+
+save(nano.data, file = "nano.data")
+
+#removing empty rows ADORA2A:YWHAZ , `BMI (kg/m2)`, Therapy TNFRSF18, VTCN1, NECTIN2, AHR, CCR4, RUNX3
+sampledata <- nano.data %>%
+  select(Sample, ADORA2A:YWHAZ)
+
+save(sampledata, file = "sampledata")
+
+sampledata.w.age <- nano.data %>%
+  select(Sample, Age, ADORA2A:YWHAZ)
+
+g.and.c.data <- nano.data
+
+#formatting therapy and stage
+IV <- c("IV")
+IIIvalues <- c("IIIC", "IIIA", "IIIB", "III")
+III <- paste(IIIvalues, collapse = "|")
+IIvalues <- c("IIC", "IIB")
+II <- paste(IIvalues, collapse = "|")
+start.stage <- g.and.c.data$`Stage (7th ed.) prior to therapy`
+
+
+g.and.c.data$Stage <- ifelse(grepl(III, start.stage), as.numeric("3"),
+                          ifelse(grepl(IV, start.stage), as.numeric("4"),
+                                ifelse(grepl(II, start.stage), as.numeric("2"), as.numeric("1"))))
+
+
+#switching therapy to a number Nivolumab=1 Pembrolizumab=2 Ipilimumab=3
+
+g.and.c.data$therapy.used <- ifelse(g.and.c.data$Therapy == 'Nivolumab', as.numeric("1"),
+               ifelse(g.and.c.data$Therapy == 'Pembrolizumab', as.numeric("2"),
+                 ifelse(g.and.c.data$Therapy == 'Ipilimumab', as.numeric("3"), as.numeric("0"))))
+
+save(g.and.c.data, file = "g.and.c.data")
+
+#reading in age file to perform age deviance calculation
+age.file <- read.xlsx(("T:/Labs/Burd/CEBurd lab/Noah Lepola/Adjuvant Melanoma Paper/Adj age correction.xlsx"))
+#renaming genes to match what is in nanostring
+gene_list <- colnames(sampledata.w.age)
+age.file[age.file == "CD45RO"] <- "PTPRC_1"
+age.file[age.file == "CD45RA"] <- "PTPRC_2"
+age.file[age.file == "CD45RB"] <- "PTPRC_3"
+
+age.file2 <- subset(age.file, (Gene %in% gene_list))
+
+
+#creating a file for deviance from expected gene expression given age
+#formatting so files can be combined
+long.data <- sampledata.w.age %>% 
+  pivot_longer(
+    cols = ADORA2A:YWHAZ, 
+    names_to = "Gene", 
+    values_to = "Value"
+  )
+#combining patient data with age averages
+long.data2 <- merge(long.data, age.file2, by = "Gene")
+#creating predicted values
+long.data2 <- long.data2 %>%
+  mutate(
+    Expected = (Age * Slope) + Intercept,
+  )
+#Difference between observed and expected
+long.data2 <- long.data2 %>%
+  mutate(
+    Difference = Expected - Value,
+  )
+#Selecting only columns to be used in rf model
+long.data3 <- long.data2 %>% dplyr::select(Sample, Gene, Difference) 
+#converting to format usable by rf
+age.diff <- long.data3 %>% 
+  pivot_wider(names_from = Gene, values_from = Difference)
+
+chr.df <- g.and.c.data %>%
+  select(-(ADORA2A:YWHAZ))
+
+age_dev_and_chr <- left_join(age.diff, chr.df, by = c("Sample"))
+
+save(age_dev_and_chr, file = "age_dev_and_chr")
+
+```
+can be more specific using select(-thingsIdon'twant) to take out unwanted it
+Could do something with string manipulation. Regex is very good, look into it
+Intersect tells which they have in common between the two df
+Union combines all for both df
+#drop_na(Sample)
+Have a function with an empty space for the function 
+function(){code that loads data, return(data)}
+```{r}
+#Reading in patient data
+adjing.data <- openxlsx::loadWorkbook("T:/Labs/Spakowicz/mitox/Clinical info/Patient Data 7-1-22.xlsm")
+
+
+#selecting sheet with progressed/treatment completed
+Adj_Datasheet <- readWorkbook(adjing.data, sheet = "Adj Datasheet", startRow = 2)
+
+alting_names <- rename(Adj_Datasheet, Coded.Sample = 52, Drugs = 21, Date.of.treatment = 22)
+
+new_status <- subset(alting_names, Cohort != "Excluded")
+
+#creating data frames with only sample and progression
+status <- new_status %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`, Cohort)
+
+#adjusting names to match
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\) *", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\)*", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("- ", "-", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("^\\s+|\\s+$", "", status$`Coded.Sample.#`)
+#removing samples that aren't in nanostring
+status_cohort <- subset(status, (`Coded.Sample.#` %in% sampledata$Sample)) 
+
+
+
+```
+
+```{r}
+
+   #removing extra information and correcting spelling
+   status_cohort$Reason.for.discontinuation <- gsub( " */*Intolerance", "",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <- gsub( " */ *", "",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\)*", "",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <-gsub("- ", "-",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <-gsub("^\\s+|\\s+$", "",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <-gsub("Toxcity", "Toxicity",  status_cohort$Reason.for.discontinuation)
+  
+  status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", status_cohort$Reason.for.discontinuation)
+  status_cohort$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", status_cohort$Reason.for.discontinuation)
+
+adj_val_cohort <- subset(status_cohort, Cohort == "Adj Validation") %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`)
+adj_cohort <-subset(status_cohort, Cohort == "Adj") %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`)
+
+
+save(adj_val_cohort, file = "adj_val_cohort")
+save(adj_cohort, file = "adj_cohort")
+
+#Getting toxicity
+toxicity_val <- subset(adj_val_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
+  
+toxicity_adj <- subset(adj_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
+
+#Getting completed treatment
+  complete_t_val <- subset(adj_val_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+  
+  complete_t_adj <- subset(adj_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
+
+#Getting progression
+  progression_val <- subset(adj_val_cohort, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
+  
+  progression_adj <- subset(adj_cohort, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
+
+#saving cohort files
+save(toxicity_val, file = "toxicity_val")
+save(toxicity_adj, file = "toxicity_adj")
+save(complete_t_val, file = "complete_t_val")
+save(complete_t_adj, file = "complete_t_adj")
+save(progression_val, file = "progression_val")
+save(progression_adj, file = "progression_adj")
+
+  
+#creating sample data which is only adj or val
+val_sampledata <- subset(sampledata, (Sample %in% adj_val_cohort$`Coded.Sample.#`)) 
+adj_sampledata <- subset(sampledata, (Sample %in% adj_cohort$`Coded.Sample.#`)) 
+
+
+
+save(val_sampledata, file = "val_sampledata")
+save(adj_sampledata, file = "adj_sampledata")
+
+
+g.and.c.data.val <- subset(g.and.c.data, (Sample %in% adj_val_cohort$`Coded.Sample.#`)) 
+g.and.c.data.adj <- subset(g.and.c.data, (Sample %in% adj_cohort$`Coded.Sample.#`)) 
+
+save(g.and.c.data.val, file = "g.and.c.data.val")
+save(g.and.c.data.adj, file = "g.and.c.data.adj")
+
+
+
+
+```
+
+```{r}
+#creating files for specific scripts
+
+#for recurrence top genes and characteristics
+rec.tgc <- g.and.c.data %>%
+  select(Sample,  CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3, `BMI (kg/m2)`)
+save(rec.tgc, file = "rec.tgc")
+
+
+#for recurrence top genes
+rec_top <- g.and.c.data %>%
+  select(Sample,  CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3)
+save(rec_top, file = "rec_top")
+
+#for toxicity top genes and characteristics
+tox.tgc <- g.and.c.data %>%
+  select(Sample, PDCD1LG2, NECTIN2, Therapy)
+save(tox.tgc, file = "tox.tgc")
+
+
+#for toxicity top genes
+tox_top <- sampledata %>%
+  select(Sample,  PDCD1LG2, NECTIN2)
+save(tox_top, file = "tox_top")
+
+```
+
+
+
+
+
+
+

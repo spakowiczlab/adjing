@@ -13,15 +13,18 @@ library(ggplot2)
 library(randomForest)
 library(ROCR)
 
-knitr::opts_knit$set(root.dir = "T:/Labs/Burd/CEBurd Lab/Noah Lepola/Coding/my adjing work folder/Scripts for paper/Saved files for paper")
 
 
 ```
 
 ```{r}
-load(file = "adj_val_cohort")
-load(file = "adj_cohort")
-load(file = "sampledata")
+load(file = "../Outputs/toxicity_val")
+load(file = "../Outputs/complete_t_val")
+
+load(file = "../Outputs/toxicity_adj")
+load(file = "../Outputs/complete_t_adj")
+
+load(file = "../Outputs/sampledata")
 
 ```
 
@@ -29,40 +32,13 @@ load(file = "sampledata")
 ```{r}
 k_validate <- function(treatment_outcome, patient_data, seed){
   set.seed(seed)
-  
-  #Getting toxicity
-  toxicity_val <- subset(adj_val_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
-  
-  toxicity_adj <- subset(adj_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
-    
-   #removing extra information and correcting spelling
-   toxicity_val$Reason.for.discontinuation <- gsub( " */*Intolerance", "",  toxicity_val$Reason.for.discontinuation)
-   toxicity_val$Reason.for.discontinuation <- gsub( " */ *", "",  toxicity_val$Reason.for.discontinuation)
-   toxicity_val$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "",  toxicity_val$Reason.for.discontinuation)
-   toxicity_val$Reason.for.discontinuation <- gsub( " *\\(.*?\\)*", "",  toxicity_val$Reason.for.discontinuation)
-   toxicity_val$Reason.for.discontinuation <-gsub("- ", "-",  toxicity_val$Reason.for.discontinuation)
-   toxicity_val$Reason.for.discontinuation <-gsub("^\\s+|\\s+$", "",  toxicity_val$Reason.for.discontinuation)
-   toxicity_val$Reason.for.discontinuation <-gsub("Toxcity", "Toxicity",  toxicity_val$Reason.for.discontinuation)
-  
-  toxicity_adj$Reason.for.discontinuation <- gsub( " */*Intolerance", "", toxicity_adj$Reason.for.discontinuation)
-  toxicity_adj$Reason.for.discontinuation <- gsub( " */ *", "", toxicity_adj$Reason.for.discontinuation)
-  toxicity_adj$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", toxicity_adj$Reason.for.discontinuation)
-  toxicity_adj$Reason.for.discontinuation <- gsub( " *\\(.*?\\)*", "", toxicity_adj$Reason.for.discontinuation)
-  toxicity_adj$Reason.for.discontinuation <-gsub("- ", "-", toxicity_adj$Reason.for.discontinuation)
-  toxicity_adj$Reason.for.discontinuation <-gsub("^\\s+|\\s+$", "", toxicity_adj$Reason.for.discontinuation)
-  toxicity_adj$Reason.for.discontinuation <-gsub("Toxcity", "Toxicity", toxicity_adj$Reason.for.discontinuation)
-
 
    #shuffling
   toxicity_val <- toxicity_val[sample(nrow(toxicity_val)), ]
   
   toxicity_adj <- toxicity_adj[sample(nrow(toxicity_adj)), ]
   
-    #Getting completed treatment
-  complete_t_val <- subset(adj_val_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
-  
-  complete_t_adj <- subset(adj_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
-  
+
   #shuffling
   complete_t_val <- complete_t_val[sample(nrow(complete_t_val)), ]
   
@@ -176,7 +152,7 @@ seed_list <- c(12345,12346,12347,12348,12349,12350,12351,12352,12353,12354,12355
 #Currently working on this
 r_tox_split_group_aucprs <- kTest(response, sampledata, seed_list) 
 r_tox_split_group_aucprs_avg <- mean(r_tox_split_group_aucprs$AUCPR)
-#save(r_tox_split_group_aucprs, file = "r_tox_split_group_aucprs")
+save(r_tox_split_group_aucprs, file = "../Outputs/r_tox_split_group_aucprs")
 r_tox_split_group_aucprs_avg
 
 ```
