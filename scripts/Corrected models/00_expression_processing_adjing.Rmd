@@ -1,0 +1,58 @@
+---
+title: "00_expression_processing_adjing"
+author: "Noah Lepola"
+date: "2024-12-16"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(tableone)
+
+```
+
+
+```{r}
+#creating data frame of just the nanostring/characteristics
+
+#Reading in nanostring data file
+nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 2) %>%
+  drop_na(Sample)
+
+#getting all names to the same format
+nano.data$Sample <-gsub(" ", "-", nano.data$Sample)
+
+g.and.c.data <- nano.data
+
+#formatting therapy and stage
+IV <- c("IV")
+IIIvalues <- c("IIIC", "IIIA", "IIIB", "III")
+III <- paste(IIIvalues, collapse = "|")
+IIvalues <- c("IIC", "IIB")
+II <- paste(IIvalues, collapse = "|")
+start.stage <- g.and.c.data$`Stage (7th ed.) prior to therapy`
+
+
+g.and.c.data$Stage <- ifelse(grepl(III, start.stage), as.numeric("3"),
+                          ifelse(grepl(IV, start.stage), as.numeric("4"),
+                                ifelse(grepl(II, start.stage), as.numeric("2"), as.numeric("1"))))
+
+
+#switching therapy to a number Nivolumab=1 Pembrolizumab=2 Ipilimumab=3
+
+g.and.c.data$therapy.used <- ifelse(g.and.c.data$Therapy == 'Nivolumab', as.numeric("1"),
+               ifelse(g.and.c.data$Therapy == 'Pembrolizumab', as.numeric("2"),
+                 ifelse(g.and.c.data$Therapy == 'Ipilimumab', as.numeric("3"), as.numeric("0"))))
+
+g.and.c <- g.and.c.data %>%
+  select(Sample, Age, `BMI (kg/m2)`,`Relative lymphocyte count (%)`, `Platelets (K/uL)`, `LDH (U/L)`, Stage, Therapy, ADORA2A:YWHAZ)
+
+
+save(g.and.c, file = "../Outputs/g.and.c")
+
+```
+
+
+
