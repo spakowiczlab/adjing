@@ -9,7 +9,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(openxlsx)
-library(tableone)
 library(dplyr)
 
 ```
@@ -38,8 +37,8 @@ status$`Coded.Sample.#` <-gsub("- ", "-", status$`Coded.Sample.#`)
 status$`Coded.Sample.#` <-gsub("^\\s+|\\s+$", "", status$`Coded.Sample.#`)
 temp_status <- status %>% rename(Sample = `Coded.Sample.#`)
 #removing samples that aren't in nanostring
-load(file = "../Outputs/g.and.c")
-status_cohort <- subset(temp_status, (Sample %in% g.and.c$Sample)) 
+load(file = "../Outputs/pt.char")
+status_cohort <- subset(temp_status, (Sample %in% pt.char$Sample)) 
 
 
 ```
@@ -57,68 +56,11 @@ status_cohort <- subset(temp_status, (Sample %in% g.and.c$Sample))
   status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", status_cohort$Reason.for.discontinuation)
   status_cohort$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", status_cohort$Reason.for.discontinuation)
 
-# adj_val_cohort <- subset(status_cohort, Cohort == "Adj Validation") %>%
-#   select(Sample, `Reason.for.discontinuation`)
-# adj_cohort <-subset(status_cohort, Cohort == "Adj") %>%
-#   select(Sample, `Reason.for.discontinuation`)
-
-
-g.c.status <- merge(status_cohort, g.and.c)  
+pt.status <- (status_cohort)
+c.status <- merge(status_cohort, pt.char)  
 g.c.status.t1 <- g.c.status %>% select(-Sample)
   
-save(g.c.status, file = "../Outputs/g.c.status")
-
-
-  
-# save(adj_val_cohort, file = "adj_val_cohort")
-# save(adj_cohort, file = "adj_cohort")
-
-# #Getting toxicity
-# toxicity_val <- subset(adj_val_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
-#   
-# toxicity_adj <- subset(adj_cohort, grepl(paste("Tox", collapse = "|"), Reason.for.discontinuation))
-# 
-# #Getting completed treatment
-#   complete_t_val <- subset(adj_val_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
-#   
-#   complete_t_adj <- subset(adj_cohort, grepl(paste("Therapy complete", collapse = "|"), Reason.for.discontinuation))
-# 
-# #Getting progression
-#   progression_val <- subset(adj_val_cohort, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
-#   
-#   progression_adj <- subset(adj_cohort, grepl(paste("Progression", collapse = "|"), Reason.for.discontinuation))
-# 
-# #saving cohort files
-# save(toxicity_val, file = "toxicity_val")
-# save(toxicity_adj, file = "toxicity_adj")
-# save(complete_t_val, file = "complete_t_val")
-# save(complete_t_adj, file = "complete_t_adj")
-# save(progression_val, file = "progression_val")
-# save(progression_adj, file = "progression_adj")
-
-  
-# #creating sample data which is only adj or val
-# val_sampledata <- subset(sampledata, (Sample %in% adj_val_cohort$`Coded.Sample.#`)) 
-# adj_sampledata <- subset(sampledata, (Sample %in% adj_cohort$`Coded.Sample.#`)) 
-# 
-# 
-# 
-# save(val_sampledata, file = "val_sampledata")
-# save(adj_sampledata, file = "adj_sampledata")
-# 
-# 
-# g.and.c.data.val <- subset(g.and.c.data, (Sample %in% adj_val_cohort$`Coded.Sample.#`)) 
-# g.and.c.data.adj <- subset(g.and.c.data, (Sample %in% adj_cohort$`Coded.Sample.#`)) 
-# 
-# save(g.and.c.data.val, file = "g.and.c.data.val")
-# save(g.and.c.data.adj, file = "g.and.c.data.adj")
-
-
-
+save(pt.status, file = "../Outputs/pt.status")
 
 ```
 
-Making Table One
-```{r}
-CreateTableOne(data = g.c.status.t1)
-```

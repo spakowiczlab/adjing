@@ -1,0 +1,105 @@
+---
+title: "logr_adj_joined_all_split"
+author: "Noah Lepola"
+date: "2024-06-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(broom)
+
+
+```
+
+Loading file
+```{r}
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status")
+```
+Splitting by cohort and outcome
+```{r}
+tc.pro.outcomes.adj <- filter(pt.status, Cohort == "Adj", Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+tc.pro.outcomes.val <- filter(pt.status, Cohort == "Adj Validation", Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+tc.pro.data.adj <- filter(gene.exp, (Sample %in% tc.pro.outcomes.adj$Sample))
+tc.pro.data.val <- filter(gene.exp, (Sample %in% tc.pro.outcomes.val$Sample))
+```
+
+```{r}
+
+#renaming column and merging 
+tc.pro.df.val <- left_join(tc.pro.outcomes.val, tc.pro.data.val, by = c("Sample" = "Sample" ))
+tc.pro.df.adj <- left_join(tc.pro.outcomes.adj, tc.pro.data.adj, by = c("Sample" = "Sample" ))
+#adding numbers for outcome
+tc.pro.df.val <- tc.pro.df.val %>% mutate(Outcome = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 1,
+  TRUE ~ 0))
+tc.pro.df.adj <- tc.pro.df.adj %>% mutate(Outcome = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 1,
+  TRUE ~ 0))
+
+
+# Get a vector of gene names
+genes <- colnames(tc.pro.df.adj[, 4:82])
+fixed.genes <- make.names(colnames(tc.pro.df.adj[, 4:82]))
+
+#renaming columns to ones that don't produce an error
+fixed.tc.pro.df.val <- tc.pro.df.val %>% 
+  rename_with(~ fixed.genes[which((genes) == .x)], .cols = any_of(genes))
+fixed.tc.pro.df.adj <- tc.pro.df.adj %>% 
+  rename_with(~ fixed.genes[which((genes) == .x)], .cols = any_of(genes))
+
+#create data frame to store the output 
+logr_pro_val <- (data.frame(gene = genes,
+                   estimate = NA,
+                   p.value = NA))
+
+logr_pro_adj <- (data.frame(gene = genes,
+                   estimate = NA,
+                   p.value = NA))
+
+
+geneoutcome.val <- fixed.tc.pro.df.val %>%
+  select(-Sample, -Reason.for.discontinuation) 
+
+geneoutcome.adj <- fixed.tc.pro.df.adj %>%
+  select(-Sample, -Reason.for.discontinuation) 
+
+
+for (g in 1:length(fixed.genes)) {
+  f <- as.formula(paste0("Outcome ~ ",fixed.genes[g]))
+   tmp <- glm(formula = f, data = geneoutcome.val, family = binomial)
+   tmpdf <- broom::tidy(tmp)
+#  retrieve the line of interest with g, estimate, and p-value
+   logr_pro_val$estimate[g] <- tmpdf$estimate[2]
+   logr_pro_val$p.value[g] <- tmpdf$p.value[2]
+ 
+}
+logr_pro_val <- logr_pro_val %>%
+   mutate(FDR = p.adjust(p.value)) %>%
+   arrange(FDR) 
+#might have a - sign. Will put to console, might want to assign it
+
+
+for (g in 1:length(fixed.genes)) {
+  f <- as.formula(paste0("Outcome ~ ",fixed.genes[g]))
+   tmp <- glm(formula = f, data = geneoutcome.adj, family = binomial)
+   tmpdf <- broom::tidy(tmp)
+#  retrieve the line of interest with g, estimate, and p-value
+   logr_pro_adj$estimate[g] <- tmpdf$estimate[2]
+   logr_pro_adj$p.value[g] <- tmpdf$p.value[2]
+ 
+}
+logr_pro_adj <- logr_pro_adj %>%
+   mutate(FDR = p.adjust(p.value)) %>%
+   arrange(FDR) 
+
+save(logr_pro_val, file = "../Outputs/logr_pro_val")
+save(logr_pro_adj, file = "../Outputs/logr_pro_adj")
+
+
+```

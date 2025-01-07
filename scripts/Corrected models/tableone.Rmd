@@ -1,0 +1,43 @@
+---
+title: "tableone"
+author: "Noah Lepola"
+date: "2024-12-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tableone)
+library(tidyverse)
+
+```
+Loading files
+```{r}
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status")
+```
+
+```{r}
+pt.char.status <- full_join(pt.status, pt.char)
+pt.char.status <- pt.char.status %>% select(!Sample)
+tc.tox <-filter(pt.char.status, `Reason.for.discontinuation` == "Therapy complete" | `Reason.for.discontinuation` == "Toxicity") 
+tc.rec <-filter(pt.char.status, `Reason.for.discontinuation` == "Therapy complete" | `Reason.for.discontinuation` == "Progression") 
+
+```
+Making Table One separated by cohort
+```{r}
+cohort.strat <- CreateTableOne(strata = "Cohort", data = pt.char.status, test = FALSE)
+cohort.strat
+```
+Making Table One separated by outcome (therapy complete vs toxicity)
+```{r}
+TCvsTOX.strat <- CreateTableOne(strata = "Reason.for.discontinuation", data = tc.tox, test = FALSE)
+TCvsTOX.strat
+```
+Making Table One separated by outcome (therapy complete vs reccurance)
+```{r}
+TCvsREC.strat <- CreateTableOne(strata = "Reason.for.discontinuation", data = tc.rec, test = FALSE)
+TCvsREC.strat
+```
+

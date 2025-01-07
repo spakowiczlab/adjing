@@ -1,0 +1,70 @@
+---
+title: "02_age_deviation_processing_adjing"
+author: "Noah Lepola"
+date: "2025-1-3"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(dplyr)
+
+```
+
+```{r}
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+
+```
+
+```{r}
+temp.data <- left_join(gene.exp, pt.char)
+data.w.age <- temp.data %>%
+  select(Sample, Age, ADORA2A:YWHAZ)
+
+#reading in age file to perform age deviance calculation
+age.file <- read.xlsx(("T:/Labs/Burd/CEBurd lab/Noah Lepola/Adjuvant Melanoma Paper/Adj age correction.xlsx"))
+#renaming genes to match what is in nanostring
+gene_list <- colnames(data.w.age)
+age.file[age.file == "CD45RO"] <- "PTPRC_1"
+age.file[age.file == "CD45RA"] <- "PTPRC_2"
+age.file[age.file == "CD45RB"] <- "PTPRC_3"
+
+age.file2 <- subset(age.file, (Gene %in% gene_list))
+
+
+#creating a file for deviance from expected gene expression given age
+#formatting so files can be combined
+long.data <- data.w.age %>% 
+  pivot_longer(
+    cols = ADORA2A:YWHAZ, 
+    names_to = "Gene", 
+    values_to = "Value"
+  )
+#combining patient data with age averages
+long.data2 <- merge(long.data, age.file2, by = "Gene")
+#creating predicted values
+long.data2 <- long.data2 %>%
+  mutate(
+    Expected = (Age * Slope) + Intercept,
+  )
+#Difference between observed and expected
+long.data2 <- long.data2 %>%
+  mutate(
+    Difference = Expected - Value,
+  )
+#Selecting only columns to be used in rf model
+long.data3 <- long.data2 %>% dplyr::select(Sample, Gene, Difference) 
+#converting to format usable by rf
+age_dev <- long.data3 %>% 
+  pivot_wider(names_from = Gene, values_from = Difference)
+
+
+save(age_dev, file = "../Outputs/age_dev")
+
+
+```
+
+

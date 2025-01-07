@@ -1,0 +1,410 @@
+---
+title: "adjing_cohort_split_group_rec_all"
+author: "Noah Lepola"
+date: "202-1-2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+```
+
+Loading file
+```{r}
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status")
+```
+Splitting by cohort and outcome
+```{r}
+train.outcomes <- filter(pt.status, Cohort == "Adj", Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+test.outcomes <- filter(pt.status, Cohort == "Adj Validation", Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+train.seq <- filter(gene.exp, (Sample %in% train.outcomes$Sample))
+test.seq <- filter(gene.exp, (Sample %in% test.outcomes$Sample))
+```
+
+Limiting information to just what is needed for this model and splitting outcome from expression
+```{r}
+train.seq.top <- train.seq %>% select(Sample, CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3)
+test.seq.top <- test.seq %>% select(Sample, CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3)
+
+top.c <- pt.char %>% select(Sample, `BMI (kg/m2)`)
+train.seq.topc <- left_join(train.seq.top, top.c)
+test.seq.topc <- left_join(test.seq.top, top.c)
+
+train.outcomes <- train.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+test.outcomes <- test.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+```
+Randomizing outcome
+```{r}
+train.random.outcomes<- train.outcomes
+test.random.outcomes<- test.outcomes
+
+train.random.outcomes$random.outcome<- (sample(train.outcomes$Reason.for.discontinuation))
+test.random.outcomes$random.outcome<- (sample(test.outcomes$Reason.for.discontinuation))
+
+```
+Merging for total nanostring and outcomes
+```{r}
+total.seq <- full_join(train.seq, test.seq)
+total.outcome <- full_join(train.outcomes, test.outcomes)
+
+total.top.seq <- full_join(train.seq.top, test.seq.top)
+
+total.topc.seq <- full_join(train.seq, test.seq)
+
+total.random.outcome <- full_join(train.random.outcomes, test.random.outcomes)
+```
+
+```{r}
+k_validate <- function(total.outcome, total.seq, seed){
+  set.seed(seed)
+  
+
+    out <- list()
+
+      out[[1]] <- getROC(train.seq, train.outcomes, test.seq, test.outcomes)
+
+  
+  avg_aucpr <- lapply(out, function(x){ x[[1]]})
+  message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_aucpr))))
+  return(out)
+}
+```
+
+```{r}
+# Function create and test RF model #
+getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes){
+  model.training <- randomForest(x = train.seq[,-1, drop=FALSE], y = as.factor(train.outcomes$Reason.for.discontinuation))
+  test.preds <- predict(model.training, test.seq[,-1, drop=FALSE])
+  
+  print(model.training)
+  # Check variable importance
+  varImpPlot(model.training)
+  # Prediction confusion matrix
+  table(observed = test.outcomes$Reason.for.discontinuation, predicted = test.preds)
+  
+  prediction_for_roc_curve <- predict(model.training, test.seq[,-1, drop=FALSE],type="prob")
+  pred <- prediction(prediction_for_roc_curve[,2], test.outcomes$Reason.for.discontinuation, label.ordering = c("Therapy complete", "Progression"))
+  perf <- performance(pred, "tpr", "fpr")
+  
+  aucpr_ROCR <- performance(pred, measure = "aucpr")
+  print(aucpr_ROCR)
+  aucpr <- aucpr_ROCR@y.values[[1]]
+  print(aucpr)
+  
+  df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
+                   TruePositive=c(perf@y.values[[1]]))
+  out <- list(aucpr, df)
+  
+  return(out)
+}
+
+```
+
+```{r}
+# Grabbing AUROC values from input models #
+grabVals <- function(input){
+  out <- list()
+   for(i in 1:length(seed_list)){
+      out <- append(out, input[[i]][[1]][[1]])
+   }
+  out
+}
+```
+
+```{r}
+# Main function call to generate RF models using 25 seeds #
+kTest <- function(total.outcome, total.seq, seed_list){
+  out <- list()
+   for(i in 1:length(seed_list)){
+    out[[i]] <- k_validate(total.outcome, total.seq, seed = seed_list[i])
+   }
+  out <- grabVals(out)
+  
+  # CW edit to function 
+  out <- do.call(rbind.data.frame, out)
+  colnames(out) <- c("AUCPR")
+  out
+}
+```
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+r_rec_split_group_aucprs <- kTest(total.outcome, total.seq, seed_list) 
+r_rec_split_group_aucprs_avg <- mean(r_rec_split_group_aucprs$AUCPR)
+#save(r_rec_split_group_aucprs, file = "../Outputs/r_rec_split_group_aucprs")
+r_rec_split_group_aucprs_avg
+
+```
+
+
+Top genes model
+```{r}
+k_validate <- function(total.outcome, total.top.seq, seed){
+  set.seed(seed)
+  
+
+    out <- list()
+
+      out[[1]] <- getROC(train.seq.top, train.outcomes, test.seq.top, test.outcomes)
+
+  
+  avg_aucpr <- lapply(out, function(x){ x[[1]]})
+  message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_aucpr))))
+  return(out)
+}
+```
+
+```{r}
+# Function create and test RF model #
+getROC <- function(train.seq.top, train.outcomes, test.seq.top, test.outcomes){
+  model.training <- randomForest(x = train.seq.top[,-1, drop=FALSE], y = as.factor(train.outcomes$Reason.for.discontinuation))
+  test.preds <- predict(model.training, test.seq.top[,-1, drop=FALSE])
+  
+  print(model.training)
+  # Check variable importance
+  varImpPlot(model.training)
+  # Prediction confusion matrix
+  table(observed = test.outcomes$Reason.for.discontinuation, predicted = test.preds)
+  
+  prediction_for_roc_curve <- predict(model.training, test.seq.top[,-1, drop=FALSE],type="prob")
+  pred <- prediction(prediction_for_roc_curve[,2], test.outcomes$Reason.for.discontinuation, label.ordering = c("Therapy complete", "Progression"))
+  perf <- performance(pred, "tpr", "fpr")
+  
+  aucpr_ROCR <- performance(pred, measure = "aucpr")
+  print(aucpr_ROCR)
+  aucpr <- aucpr_ROCR@y.values[[1]]
+  print(aucpr)
+  
+  df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
+                   TruePositive=c(perf@y.values[[1]]))
+  out <- list(aucpr, df)
+  
+  return(out)
+}
+
+```
+
+```{r}
+# # Grabbing AUROC values from input models #
+# grabVals <- function(input){
+#   out <- list()
+#    for(i in 1:length(seed_list)){
+#       out <- append(out, input[[i]][[1]][[1]])
+#    }
+#   out
+# }
+```
+
+```{r}
+# Main function call to generate RF models using 25 seeds #
+kTest <- function(total.outcome, total.top.seq, seed_list){
+  out <- list()
+   for(i in 1:length(seed_list)){
+    out[[i]] <- k_validate(total.outcome, total.top.seq, seed = seed_list[i])
+   }
+  out <- grabVals(out)
+  
+  # CW edit to function 
+  out <- do.call(rbind.data.frame, out)
+  colnames(out) <- c("AUCPR")
+  out
+}
+```
+
+```{r}
+# seed_list <- c(12345:12369)
+```
+
+
+```{r}
+r_rec_split_top12_group_aucprs <- kTest(total.outcome, total.top.seq, seed_list) 
+r_rec_split_top12_group_aucprs_avg <- mean(r_rec_split_top12_group_aucprs$AUCPR)
+#save(r_rec_split_top12_group_aucprs, file = "../Outputs/r_rec_split_top12_group_aucprs")
+r_rec_split_top12_group_aucprs_avg
+
+```
+
+
+Top genes and characteristic model
+```{r}
+k_validate <- function(total.outcome, total.topc.seq, seed){
+  set.seed(seed)
+  
+
+    out <- list()
+
+      out[[1]] <- getROC(train.seq.topc, train.outcomes, test.seq.topc, test.outcomes)
+
+  
+  avg_aucpr <- lapply(out, function(x){ x[[1]]})
+  message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_aucpr))))
+  return(out)
+}
+```
+
+```{r}
+# Function create and test RF model #
+getROC <- function(train.seq.topc, train.outcomes, test.seq.topc, test.outcomes){
+  model.training <- randomForest(x = train.seq.topc[,-1, drop=FALSE], y = as.factor(train.outcomes$Reason.for.discontinuation))
+  test.preds <- predict(model.training, test.seq.topc[,-1, drop=FALSE])
+  
+  print(model.training)
+  # Check variable importance
+  varImpPlot(model.training)
+  # Prediction confusion matrix
+  table(observed = test.outcomes$Reason.for.discontinuation, predicted = test.preds)
+  
+  prediction_for_roc_curve <- predict(model.training, test.seq.topc[,-1, drop=FALSE],type="prob")
+  pred <- prediction(prediction_for_roc_curve[,2], test.outcomes$Reason.for.discontinuation, label.ordering = c("Therapy complete", "Progression"))
+  perf <- performance(pred, "tpr", "fpr")
+  
+  aucpr_ROCR <- performance(pred, measure = "aucpr")
+  print(aucpr_ROCR)
+  aucpr <- aucpr_ROCR@y.values[[1]]
+  print(aucpr)
+  
+  df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
+                   TruePositive=c(perf@y.values[[1]]))
+  out <- list(aucpr, df)
+  
+  return(out)
+}
+
+```
+
+```{r}
+# # Grabbing AUROC values from input models #
+# grabVals <- function(input){
+#   out <- list()
+#    for(i in 1:length(seed_list)){
+#       out <- append(out, input[[i]][[1]][[1]])
+#    }
+#   out
+# }
+```
+
+```{r}
+# Main function call to generate RF models using 25 seeds #
+kTest <- function(total.outcome, total.topc.seq, seed_list){
+  out <- list()
+   for(i in 1:length(seed_list)){
+    out[[i]] <- k_validate(total.outcome, total.topc.seq, seed = seed_list[i])
+   }
+  out <- grabVals(out)
+  
+  # CW edit to function 
+  out <- do.call(rbind.data.frame, out)
+  colnames(out) <- c("AUCPR")
+  out
+}
+```
+
+```{r}
+# seed_list <- c(12345:12369)
+```
+
+```{r}
+r_rec_split_group_top12_chr_aucprs <- kTest(total.outcome, total.topc.seq, seed_list) 
+r_rec_split_group_top12_chr_aucprs_avg <- mean(r_rec_split_group_top12_chr_aucprs$AUCPR)
+#save(r_rec_split_group_top12_chr_aucprs, file = "../Outputs/r_rec_split_group_top12_chr_aucprs")
+r_rec_split_group_top12_chr_aucprs_avg
+
+```
+
+
+Model with random outcomes
+```{r}
+k_validate <- function(total.random.outcome, total.seq, seed){
+  set.seed(seed)
+  
+
+    out <- list()
+
+      out[[1]] <- getROC(train.seq, train.random.outcomes, test.seq, test.random.outcomes)
+
+  
+  avg_aucpr <- lapply(out, function(x){ x[[1]]})
+  message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_aucpr))))
+  return(out)
+}
+```
+
+```{r}
+# Function create and test RF model #
+getROC <- function(train.seq, train.random.outcomes, test.seq, test.random.outcomes){
+  model.training <- randomForest(x = train.seq[,-1, drop=FALSE], y = as.factor(train.random.outcomes$random.outcome))
+  test.preds <- predict(model.training, test.seq[,-1, drop=FALSE])
+  
+  # print(model.training)
+  # Check variable importance
+  # varImpPlot(model.training)
+  # Prediction confusion matrix
+  table(observed = test.random.outcomes$random.outcome, predicted = test.preds)
+  
+  prediction_for_roc_curve <- predict(model.training, test.seq[,-1, drop=FALSE],type="prob")
+  pred <- prediction(prediction_for_roc_curve[,2], test.random.outcomes$random.outcome, label.ordering = c("Therapy complete", "Progression"))
+  perf <- performance(pred, "tpr", "fpr")
+  
+  aucpr_ROCR <- performance(pred, measure = "aucpr")
+  print(aucpr_ROCR)
+  aucpr <- aucpr_ROCR@y.values[[1]]
+  print(aucpr)
+  
+  df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
+                   TruePositive=c(perf@y.values[[1]]))
+  out <- list(aucpr, df)
+  
+  return(out)
+}
+
+```
+
+```{r}
+# # Grabbing AUROC values from input models #
+# grabVals <- function(input){
+#   out <- list()
+#    for(i in 1:length(seed_list_r)){
+#       out <- append(out, input[[i]][[1]][[1]])
+#    }
+#   out
+# }
+```
+
+```{r}
+# Main function call to generate RF models using 25 seeds #
+kTest <- function(total.random.outcome, total.seq, seed_list_r){
+  out <- list()
+   for(i in 1:length(seed_list_r)){
+    out[[i]] <- k_validate(total.random.outcome, total.seq, seed = seed_list_r[i])
+   }
+  out <- grabVals(out)
+  
+  # CW edit to function 
+  out <- do.call(rbind.data.frame, out)
+  colnames(out) <- c("AUCPR")
+  out
+}
+```
+
+```{r}
+seed_list_r <- c(12345:12844)
+```
+
+```{r}
+r_random_rec_split_group_aucprs <- kTest(response, sampledata, seed_list_r) 
+r_random_rec_split_group_aucprs_avg <- mean(r_random_rec_split_group_aucprs$AUCPR)
+#save(r_random_rec_split_group_aucprs, file = "../Outputs/r_random_rec_split_group_aucprs")
+r_random_rec_split_group_aucprs_avg
+
+```

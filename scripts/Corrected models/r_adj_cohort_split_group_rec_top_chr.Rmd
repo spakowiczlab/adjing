@@ -17,74 +17,54 @@ library(ROCR)
 
 ```
 
+Loading file
 ```{r}
-load(file = "../Outputs/progression_val")
-load(file = "../Outputs/complete_t_val")
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status")
+```
+Splitting by cohort and outcome
+```{r}
+train.outcomes <- filter(pt.status, Cohort == "Adj", Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+test.outcomes <- filter(pt.status, Cohort == "Adj Validation", Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+train.seq <- filter(gene.exp, (Sample %in% train.outcomes$Sample))
+test.seq <- filter(gene.exp, (Sample %in% test.outcomes$Sample))
+```
 
-load(file = "../Outputs/progression_adj")
-load(file = "../Outputs/complete_t_adj")
+Limiting information to just what is needed for this model and splitting outcome from expression
+```{r}
+train.seq.top <- train.seq %>% select(Sample, CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3, ZBTB7B, GZMB, CD160)
+test.seq.top <- test.seq %>% select(Sample, CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3, ZBTB7B, GZMB, CD160)
 
-load(file = "../Outputs/rec.tgc")
+top.c <- pt.char %>% select(Sample, `BMI (kg/m2)`)
+train.seq.topc <- left_join(train.seq.top, top.c)
+test.seq.topc <- left_join(test.seq.top, top.c)
 
+train.outcomes <- train.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+test.outcomes <- test.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+```
+Merging for total nanostring and outcomes
+```{r}
+total.topc.seq <- full_join(train.seq, test.seq)
+total.outcome <- full_join(train.outcomes, test.outcomes)
 ```
 
 
 top ten genes by log regression VTCN1, CD160, GZMB, AHR, `IL-17A`, FOXO1, ITCH, BCL6, PVRIG, CD27
 top 15 genes by log regression using only Adj (exploratory) cohort CD3D, HAVCR2, AHR, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3, ZBTB7B, GZMB, CD160
-top characteristics using only Adj (exploratory) cohort `BMI (kg/m2)`, `LDH (U/L)`, Therapy, `Platelets (K/uL)`, Age, Stage, `Relative lymphocyte count (%)`
+top characteristics using only Adj (exploratory) cohort `BMI (kg/m2)`, `LDH (U/L)`, Therapy, `Platelets (K/uL)`, Age, Stage
 
 
 
 ```{r}
-k_validate <- function(treatment_outcome, patient_data, seed){
+k_validate <- function(total.outcome, total.topc.seq, seed){
   set.seed(seed)
   
 
-   #shuffling
-  progression_val <- progression_val[sample(nrow(progression_val)), ]
-  
-  progression_adj <- progression_adj[sample(nrow(progression_adj)), ]
-  
-
-  #shuffling
-  complete_t_val <- complete_t_val[sample(nrow(complete_t_val)), ]
-  
-  complete_t_adj <- complete_t_adj[sample(nrow(complete_t_adj)), ]
-
-    # Creating index data frame for the progress/completed to ensure coverage for each group
-    prog_indexes_val <- c(rep(1, 10))
-    comp_indexes_val <- c(rep(1, 29))
-    prog_indexes_adj <- c(rep(1, 12))
-    comp_indexes_adj <- c(rep(1, 32))
     out <- list()
-    
-    # Creating testing and training groups #
-    for(i in 1:1){
-      pIndexes_val <- which(prog_indexes_val == i, arr.ind = TRUE)
-      cIndexes_val <- which(comp_indexes_val == i, arr.ind = TRUE)
-      pIndexes_adj <- which(prog_indexes_adj == i, arr.ind = TRUE)
-      cIndexes_adj <- which(comp_indexes_adj == i, arr.ind = TRUE)
-      
-      test.outcomes <- rbind(complete_t_val[cIndexes_val, ], progression_val[pIndexes_val, ])
-      train.outcomes <- rbind(complete_t_adj[cIndexes_adj, ], progression_adj[pIndexes_adj, ])
-      
-      test.seq <- rec.tgc[which(rec.tgc$Sample %in% test.outcomes$`Coded.Sample.#`), ]
-      test.seq <- test.seq[match(test.outcomes$`Coded.Sample.#`, test.seq$Sample), ]
-      
-      train.seq <- rec.tgc[which(rec.tgc$Sample %in% train.outcomes$`Coded.Sample.#`), ]
-      train.seq <- train.seq[match(train.outcomes$`Coded.Sample.#`, train.seq$Sample), ]
-      
-      if(all(train.seq$Sample == train.outcomes$`Coded.Sample.#`) == FALSE){
-        stop("Training Sample_IDs do not match")
-      }
-      if(all(test.seq$Sample == test.outcomes$`Coded.Sample.#`) == FALSE){
-        stop("Testing Sample_IDs do not match")
-      }
-      
-      # Creating the RF model #
-      out[[i]] <- getROC(train.seq, train.outcomes, test.seq, test.outcomes)
-    }
-  
+
+      out[[1]] <- getROC(train.seq.topc, train.outcomes, test.seq.topc, test.outcomes)
+
   
   avg_aucpr <- lapply(out, function(x){ x[[1]]})
   message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_aucpr))))
@@ -94,18 +74,18 @@ k_validate <- function(treatment_outcome, patient_data, seed){
 
 ```{r}
 # Function create and test RF model #
-getROC <- function(train, outcomes.train, test, outcomes.test){
-  model.training <- randomForest(x = train[,-1, drop=FALSE], y = as.factor(outcomes.train$Reason.for.discontinuation))
-  test.preds <- predict(model.training, test[,-1, drop=FALSE])
+getROC <- function(train.seq.topc, train.outcomes, test.seq.topc, test.outcomes){
+  model.training <- randomForest(x = train.seq.topc[,-1, drop=FALSE], y = as.factor(train.outcomes$Reason.for.discontinuation))
+  test.preds <- predict(model.training, test.seq.topc[,-1, drop=FALSE])
   
   print(model.training)
   # Check variable importance
   varImpPlot(model.training)
   # Prediction confusion matrix
-  table(observed = outcomes.test$Reason.for.discontinuation, predicted = test.preds)
+  table(observed = test.outcomes$Reason.for.discontinuation, predicted = test.preds)
   
-  prediction_for_roc_curve <- predict(model.training,test[,-1, drop=FALSE],type="prob")
-  pred <- prediction(prediction_for_roc_curve[,2], outcomes.test$Reason.for.discontinuation, label.ordering = c("Therapy complete", "Progression"))
+  prediction_for_roc_curve <- predict(model.training, test.seq.topc[,-1, drop=FALSE],type="prob")
+  pred <- prediction(prediction_for_roc_curve[,2], test.outcomes$Reason.for.discontinuation, label.ordering = c("Therapy complete", "Progression"))
   perf <- performance(pred, "tpr", "fpr")
   
   aucpr_ROCR <- performance(pred, measure = "aucpr")
@@ -126,27 +106,25 @@ getROC <- function(train, outcomes.train, test, outcomes.test){
 # Grabbing AUROC values from input models #
 grabVals <- function(input){
   out <- list()
-  for(i in 1:25){
-    for(j in 1:1){
-      out <- append(out, input[[i]][[j]][[1]])
-    }
-  }
+   for(i in 1:length(seed_list)){
+      out <- append(out, input[[i]][[1]][[1]])
+   }
   out
 }
 ```
 
 ```{r}
-# Main function call to generate RF models using 5 seeds #
-kTest <- function(outcome, data, seeds){
+# Main function call to generate RF models using 25 seeds #
+kTest <- function(total.outcome, total.topc.seq, seed_list){
   out <- list()
-  for(i in 1:length(seeds)){
-    out[[i]] <- k_validate(outcomes, data, seed = seeds[i])
-  }
+   for(i in 1:length(seed_list)){
+    out[[i]] <- k_validate(total.outcome, total.topc.seq, seed = seed_list[i])
+   }
   out <- grabVals(out)
   
   # CW edit to function 
   out <- do.call(rbind.data.frame, out)
-  colnames(out) <- c("aucpr")
+  colnames(out) <- c("AUCPR")
   out
 }
 ```
@@ -157,9 +135,9 @@ seed_list <- c(12345,12346,12347,12348,12349,12350,12351,12352,12353,12354,12355
 
 ```{r}
 #Currently working on this
-r_rec_split_group_top12_chr_aucprs <- kTest(response, rec.tgc, seed_list) 
-r_rec_split_group_top12_chr_aucprs_avg <- mean(r_rec_split_group_top12_chr_aucprs$aucpr)
-save(r_rec_split_group_top12_chr_aucprs, file = "../Outputs/r_rec_split_group_top12_chr_aucprs")
-r_rec_split_group_top12_chr_aucprs_avg
+r_rec_split_group_top15_chr_aucprs <- kTest(total.outcome, total.topc.seq, seed_list) 
+r_rec_split_group_top15_chr_aucprs_avg <- mean(r_rec_split_group_top15_chr_aucprs$aucpr)
+#save(r_rec_split_group_top15_chr_aucprs, file = "../Outputs/r_rec_split_group_top15_chr_aucprs")
+r_rec_split_group_top15_chr_aucprs_avg
 
 ```
