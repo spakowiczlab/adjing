@@ -1,0 +1,95 @@
+---
+title: "00_expression_processing_adjing"
+author: "Noah Lepola"
+date: "2024-12-16"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(tableone)
+
+```
+
+
+```{r}
+#creating data frame of just the nanostring/characteristics
+
+#Reading in nanostring data file
+nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 2) %>%
+  drop_na(Sample)
+
+#getting all names to the same format
+nano.data$Sample <-gsub(" ", "-", nano.data$Sample)
+
+g.and.c.data <- nano.data
+```
+
+Encoding stage for XGBoost
+```{r}
+IV <- c("IV")
+IIIvalues <- c("IIIC", "IIIA", "IIIB", "III")
+III <- paste(IIIvalues, collapse = "|")
+IIvalues <- c("IIC", "IIB")
+II <- paste(IIvalues, collapse = "|")
+start.stage <- g.and.c.data$`Stage (7th ed.) prior to therapy`
+
+
+g.and.c.data$Stage <- ifelse(grepl(III, start.stage), as.character("3"),
+                          ifelse(grepl(IV, start.stage), as.character("4"),
+                              ifelse(grepl(II, start.stage), as.character("2"),
+                                     as.character("1"))))
+
+Stage <- g.and.c.data$Stage
+
+g.and.c.data$StageIII <- ifelse(grepl("3", Stage), as.numeric("1"),
+                                as.numeric("0"))
+
+g.and.c.data$StageIV <- ifelse(grepl("4", Stage), as.numeric("1"),
+                               as.numeric("0"))
+
+g.and.c.data$StageII <- ifelse(grepl("2", Stage), as.numeric("1"),
+                               as.numeric("0"))
+
+g.and.c.data$StageI <- ifelse(grepl("1", Stage), as.numeric("1"),
+                              as.numeric("0"))
+```
+
+Encoding therapy for XGBoost
+```{r}
+therapy.used <- g.and.c.data$Therapy
+
+g.and.c.data$Ipilimumab <- ifelse(grepl("Ipilimumab", therapy.used),
+                                  as.numeric("1"), as.numeric("0"))
+
+g.and.c.data$Nivolumab <- ifelse(grepl("Nivolumab", therapy.used),
+                                 as.numeric("1"), as.numeric("0"))
+
+g.and.c.data$Pembrolizumab <- ifelse(grepl("Pembrolizumab", therapy.used),
+                                     as.numeric("1"), as.numeric("0"))
+
+
+```
+
+
+```{r}
+gene.exp <- g.and.c.data %>%
+  select(Sample, ADORA2A:YWHAZ)
+
+
+save(gene.exp, file = "../Outputs/gene.exp")
+
+xgb.char <- g.and.c.data %>%
+  select(Sample, Age, `BMI (kg/m2)`, `Platelets (K/uL)`, `LDH (U/L)`, StageI,
+         StageII, StageIII, StageIV, Ipilimumab, Nivolumab, Pembrolizumab)
+
+
+save(xgb.char, file = "../Outputs/xgb.char")
+
+
+```
+
+
+

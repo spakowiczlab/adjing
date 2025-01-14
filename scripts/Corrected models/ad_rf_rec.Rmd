@@ -1,0 +1,60 @@
+---
+title: "adjing_cohort_split_group_rec"
+author: "Noah Lepola"
+date: "2024-11-025"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+```
+
+Loading file
+```{r}
+load(file = "../Outputs/age_dev")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status")
+```
+Splitting by cohort and outcome
+```{r}
+train.outcomes <- filter(pt.status, Cohort == "Adj", 
+Reason.for.discontinuation == "Therapy complete" |
+  Reason.for.discontinuation == "Progression")
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+test.outcomes <- filter(pt.status, Cohort == "Adj Validation",
+Reason.for.discontinuation == "Therapy complete" |
+  Reason.for.discontinuation == "Progression")
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(age_dev, (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(age_dev, (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+```
+
+```{r}
+source("../rec_functions.R")
+```
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+r_rec_split_group_aucprs <- kTest(seed_list) 
+r_rec_split_group_aucprs_avg <- mean(r_rec_split_group_aucprs$AUCPR)
+#save(r_rec_split_group_aucprs, file = "../Outputs/r_rec_split_group_aucprs")
+r_rec_split_group_aucprs_avg
+
+```

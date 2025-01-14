@@ -1,0 +1,78 @@
+---
+title: "adj_cohort_split_group_tox_top"
+author: "Noah Lepola"
+date: "2024-11-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+
+
+```
+
+```{r}
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status")
+```
+
+
+Splitting by cohort and outcome
+```{r}
+train.outcomes <- filter(pt.status, Cohort == "Adj", 
+Reason.for.discontinuation == "Therapy complete" |
+  Reason.for.discontinuation == "Toxicity")
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+test.outcomes <- filter(pt.status, Cohort == "Adj Validation",
+Reason.for.discontinuation == "Therapy complete" |
+  Reason.for.discontinuation == "Toxicity")
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp, (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp, (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+```
+
+top 15 genes by log regression using only Adj (exploratory) cohort PDCD1LG2, NECTIN2, `KIR_Inhibiting_Subgroup_2`, RUNX3, CDKN1B, B3GAT1, HPRT1, HAVCR2, `PTPRC_1`, `IL-10`, GZMB, TNF, TBX21, CCR4, PGK1
+
+
+Limiting information to just what is needed for this model and splitting outcome from expression
+```{r}
+train.seq <- train.seq %>% select(Sample, PDCD1LG2, NECTIN2)
+test.seq <- test.seq %>% select(Sample, PDCD1LG2, NECTIN2)
+
+
+train.outcomes <- train.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+test.outcomes <- test.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+```
+
+
+
+```{r}
+source("../tox_functions.R")
+```
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+#Currently working on this
+r_tox_split_group_top02_aucprs <- kTest(seed_list) 
+r_tox_split_group_top02_aucprs_avg <- mean(r_tox_split_group_top02_aucprs$AUCPR)
+#save(r_tox_split_group_top02_aucprs, file = "../Outputs/r_tox_split_group_top02_aucprs")
+r_tox_split_group_top02_aucprs_avg
+
+```

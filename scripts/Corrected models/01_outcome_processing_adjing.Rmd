@@ -44,8 +44,7 @@ status_cohort <- subset(temp_status, (Sample %in% pt.char$Sample))
 ```
 
 ```{r}
-
-   #removing extra information and correcting spelling
+#removing extra information and correcting spelling
    status_cohort$Reason.for.discontinuation <- gsub( " */*Intolerance", "",  status_cohort$Reason.for.discontinuation)
    status_cohort$Reason.for.discontinuation <- gsub( " */ *", "",  status_cohort$Reason.for.discontinuation)
    status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "",  status_cohort$Reason.for.discontinuation)
@@ -57,9 +56,10 @@ status_cohort <- subset(temp_status, (Sample %in% pt.char$Sample))
   status_cohort$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", status_cohort$Reason.for.discontinuation)
 
 pt.status <- (status_cohort)
-c.status <- merge(status_cohort, pt.char)  
-g.c.status.t1 <- g.c.status %>% select(-Sample)
-  
+```
+
+
+```{r}
 save(pt.status, file = "../Outputs/pt.status")
 
 ```
