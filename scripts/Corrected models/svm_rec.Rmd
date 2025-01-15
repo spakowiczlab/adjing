@@ -35,15 +35,16 @@ Removing StageI because svm can't handle all 0
 ```{r}
 train <- filter(status.char.exp, Cohort == "Adj", 
 Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Progression") %>% select(`Reason.for.discontinuation`, PVRIG,
- BCL6, CD244)
+  Reason.for.discontinuation == "Progression") %>% 
+  select(`Reason.for.discontinuation`, PVRIG, BCL6, CD244)
 
 test <- filter(status.char.exp, Cohort == "Adj Validation",
 Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Progression") %>% select(`Reason.for.discontinuation`, PVRIG,
- BCL6, CD244)
+  Reason.for.discontinuation == "Progression") %>% 
+  select(`Reason.for.discontinuation`, PVRIG, BCL6, CD244)
 
 ```
+
 
 
 Converting to factor for use in svm
@@ -61,12 +62,15 @@ set.seed(12345)
 
 ```{r}
 
-train.model <- svm(`Reason.for.discontinuation` ~ ., data = train, probability = TRUE, type = "C", class.weights=c("Progression"=0.273, "Therapy complete"=0.727))
+train.model <- svm(`Reason.for.discontinuation` ~ ., data = train, probability = 
+  TRUE, type = "C", class.weights=c("Progression"=0.273, 
+  "Therapy complete"=0.727))
 
 test.model <- predict(train.model, test, probability = TRUE, type = "C", class.weights=c("Progression"=0.256, "Therapy complete"=0.744))
 test.model.df <- data.frame(test.model)
 
-confusionMatrix(test$Reason.for.discontinuation, test.model.df$test.model)
+confusionMatrix(test$Reason.for.discontinuation, test.model.df$test.model, 
+                positive = "Progression")
 
 ```
 

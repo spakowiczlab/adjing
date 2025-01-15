@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tableone)
 library(tidyverse)
+library(officer)
 library(flextable)
 
 ```
@@ -63,8 +64,8 @@ Making Table One separated by outcome (therapy complete vs toxicity)
 ```{r}
 TCvsTOX.strat <- CreateTableOne(vars = vars23, strata = 
                 "Reason.for.discontinuation", data = tc.tox, test = TRUE) 
-  
-TCvsTOX.strat
+
+TCvsTOX.strat 
 ```
 
 
@@ -77,5 +78,6 @@ TCvsREC.strat <- CreateTableOne(vars = vars23, strata =
                 "Reason.for.discontinuation", data = tc.rec, test = TRUE)
   
 TCvsREC.strat
+
 ```
 

@@ -55,7 +55,8 @@ Limiting information to just what is needed for this model and splitting outcome
 train.seq <- train.seq %>% select(Sample, NECTIN2)
 test.seq <- test.seq %>% select(Sample, NECTIN2)
 
-top.c <- pt.char %>% select(Sample, Therapy, `BMI (kg/m2)`, `Platelets (K/uL)`, `LDH (U/L)`, Stage)
+top.c <- pt.char %>% select(Sample, Therapy, `BMI (kg/m2)`, `Platelets (K/uL)`,
+                            `LDH (U/L)`, Stage)
 train.seq <- left_join(train.seq, top.c)
 test.seq <- left_join(test.seq, top.c)
 

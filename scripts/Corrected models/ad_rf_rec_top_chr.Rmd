@@ -51,10 +51,15 @@ test.seq <- arrange(test.seq, desc(Sample))
 
 Limiting information to just what is needed for this model and splitting outcome from expression
 ```{r}
-train.seq <- train.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, GZMB, CD244, CD274, ZBTB7B, CXCR3, CD160, CD276)
-test.seq <- test.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, GZMB, CD244, CD274, ZBTB7B, CXCR3, CD160, CD276)
+train.seq <- train.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1,
+ `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, GZMB, CD244, CD274, ZBTB7B, CXCR3)
 
-top.c <- pt.char %>% select(Sample, `BMI (kg/m2)`)
+
+test.seq <- test.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1, 
+ `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, GZMB, CD244, CD274, ZBTB7B, CXCR3)
+
+top.c <- pt.char %>% select(Sample, `BMI (kg/m2)`, `LDH (U/L)`, Therapy, 
+                            `Platelets (K/uL)`, Age)
 train.seq <- left_join(train.seq, top.c)
 test.seq <- left_join(test.seq, top.c)
 

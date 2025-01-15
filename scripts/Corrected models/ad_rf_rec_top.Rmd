@@ -47,10 +47,15 @@ test.seq <- filter(age_dev, (Sample %in% test.outcomes$Sample))
 test.seq <- arrange(test.seq, desc(Sample))
 ```
 
+
 Limiting information to just what is needed for this model and splitting outcome from expression
 ```{r}
-train.seq <- train.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28)
-test.seq <- test.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28)
+train.seq <- train.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1,
+ `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, GZMB, CD244, CD274, ZBTB7B, CXCR3)
+
+
+test.seq <- test.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1, 
+ `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, GZMB, CD244, CD274, ZBTB7B, CXCR3)
 
 train.outcomes <- train.outcomes %>% select(Sample, `Reason.for.discontinuation`)
 test.outcomes <- test.outcomes %>% select(Sample, `Reason.for.discontinuation`)
