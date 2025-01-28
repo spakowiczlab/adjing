@@ -23,17 +23,29 @@ load(file = "../Outputs/pt.char")
 load(file = "../Outputs/pt.status")
 ```
 
-
 Splitting by cohort and outcome
+
 ```{r}
-train.outcomes <- filter(pt.status, Cohort == "Adj", 
-Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Toxicity")
+sorting <- function(data, cohort, outcome1, outcome2){
+  filter(data, 
+         Cohort == cohort, 
+         Reason.for.discontinuation == outcome1 | 
+           Reason.for.discontinuation == outcome2)  
+}
+  
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete", 
+                          "Toxicity")
+
 train.outcomes <- arrange(train.outcomes, desc(Sample))
 
-test.outcomes <- filter(pt.status, Cohort == "Adj Validation",
-Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Toxicity")
+
+test.outcomes <- sorting(pt.status, 
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Toxicity")
+
 test.outcomes <- arrange(test.outcomes, desc(Sample))
 
 
@@ -45,20 +57,36 @@ test.seq <- filter(gene.exp, (Sample %in% test.outcomes$Sample))
 test.seq <- arrange(test.seq, desc(Sample))
 ```
 
+
 top 15 genes by log regression using only Adj (exploratory) cohort PDCD1LG2, NECTIN2, `KIR_Inhibiting_Subgroup_2`, RUNX3, CDKN1B, B3GAT1, HPRT1, HAVCR2, `PTPRC_1`, `IL-10`, GZMB, TNF, TBX21, CCR4, PGK1
 
-
 Limiting information to just what is needed for this model and splitting outcome from expression
+
 ```{r}
-train.seq <- train.seq %>% select(Sample, PDCD1LG2, NECTIN2)
-test.seq <- test.seq %>% select(Sample, PDCD1LG2, NECTIN2)
+train.seq <- train.seq %>% select(Sample, 
+                                  # PDCD1LG2, NECTIN2
+                                  # TNF, TGFB1
+                                VTCN1,
+                                TNFRSF18,
+                                IFNG,
+                                # CXCR3
+                                  )
+test.seq <- test.seq %>% select(Sample, 
+                                # PDCD1LG2, NECTIN2
+                                # TNF, TGFB1
+                                VTCN1,
+                                TNFRSF18,
+                                IFNG,
+                                # CXCR3
+                                )
 
 
-train.outcomes <- train.outcomes %>% select(Sample, `Reason.for.discontinuation`)
-test.outcomes <- test.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+train.outcomes <- train.outcomes %>% select(Sample, 
+                                            `Reason.for.discontinuation`)
+
+test.outcomes <- test.outcomes %>% select(Sample, 
+                                          `Reason.for.discontinuation`)
 ```
-
-
 
 ```{r}
 source("../tox_functions.R")

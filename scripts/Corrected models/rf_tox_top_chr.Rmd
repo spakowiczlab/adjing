@@ -26,14 +26,26 @@ load(file = "../Outputs/pt.status")
 
 Splitting by cohort and outcome
 ```{r}
-train.outcomes <- filter(pt.status, Cohort == "Adj", 
-Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Toxicity")
+sorting <- function(data, cohort, outcome1, outcome2){
+  filter(data, 
+         Cohort == cohort, 
+         Reason.for.discontinuation == outcome1 | 
+           Reason.for.discontinuation == outcome2)  
+}
+  
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete", 
+                          "Toxicity")
+
 train.outcomes <- arrange(train.outcomes, desc(Sample))
 
-test.outcomes <- filter(pt.status, Cohort == "Adj Validation",
-Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Toxicity")
+
+test.outcomes <- sorting(pt.status, 
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Toxicity")
+
 test.outcomes <- arrange(test.outcomes, desc(Sample))
 
 

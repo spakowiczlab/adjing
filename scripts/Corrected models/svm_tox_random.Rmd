@@ -1,5 +1,5 @@
 ---
-title: "svm"
+title: "svm_tox_random"
 author: "Noah Lepola"
 date: "2025-01-14"
 output: html_document
@@ -31,26 +31,29 @@ status.char.exp <- left_join(status.char, gene.exp)
 
 ```
 
-splitting into testing and training for therapy complete or recurrence
+splitting into testing and training for therapy complete or toxicity
 Removing StageI because svm can't handle all 0
 ```{r}
-train <- filter(status.char.exp,
+train <- filter(status.char.exp, 
                 Cohort == "Adj", 
                 Reason.for.discontinuation == "Therapy complete" | 
-                  Reason.for.discontinuation == "Toxicity") %>%
+                  Reason.for.discontinuation == "Toxicity") %>% 
   select(`Reason.for.discontinuation`, 
-         TNF, TGFB1)
-# `IL-10`, `KIR_Inhibiting_Subgroup_2`, `KIR_Activating_Subgroup_2`)
+         PVRIG, BCL6, CD244
+         
+         )
 
-test <- filter(status.char.exp,
-               Cohort == "Adj Validation", 
-               Reason.for.discontinuation == "Therapy complete" | 
-                 Reason.for.discontinuation == "Toxicity") %>% 
+test <- filter(status.char.exp, 
+               Cohort == "Adj Validation",
+                Reason.for.discontinuation == "Therapy complete" | 
+                  Reason.for.discontinuation == "Toxicity") %>% 
   select(`Reason.for.discontinuation`, 
-  TNF, TGFB1)
-# `IL-10`, `KIR_Inhibiting_Subgroup_2`, `KIR_Activating_Subgroup_2`)
+         PVRIG, BCL6, CD244
+         
+         )
 
 ```
+
 
 
 Converting to factor for use in svm
@@ -62,41 +65,50 @@ test$Reason.for.discontinuation <- as.factor(test$Reason.for.discontinuation)
 
 
 ```{r}
-set.seed(12345)
+run_number <- 1:10
+svm_tox_random_aucpr <- data.frame(run = run_number, AUCPR = NA)
+seed_list <- c(12345:12369)
+
 ```
 
 
 ```{r}
+for (j in 1:length(run_number)) {
+  
+set.seed(seed_list[j])
 
-train.model <- svm(`Reason.for.discontinuation` ~ .,
+train$Reason.for.discontinuation <-
+  (sample(train$Reason.for.discontinuation))
+
+test$Reason.for.discontinuation <-
+  (sample(test$Reason.for.discontinuation))
+
+
+train.model <- svm(`Reason.for.discontinuation` ~ ., 
                    data = train, 
-                   probability = TRUE, 
+                   probability = TRUE,
                    type = "C", 
-                   # class.weights=c("Toxicity"=2.1,
-                   #                 "Therapy complete"=0.65625)
+                   # class.weights=c("Toxicity"=1.833,
+                   #                 "Therapy complete"=0.6875)
                    )
 
 test.model <- predict(train.model, 
-                      test,
-                      probability = TRUE,
-                      type = "C",
-                      # class.weights=c("Toxicity"=1.615385,
-                      #                 "Therapy complete"=0.7241379)
+                      test, 
+                      probability = TRUE, 
+                      type = "C", 
+                      # class.weights=c("Toxicity"=1.95,
+                      #                 "Therapy complete"=0.6724138)
                       )
 
 test.model.df <- data.frame(test.model)
-
-
 
 confusionMatrix(test$Reason.for.discontinuation, 
                 test.model.df$test.model, 
                 positive = "Toxicity")
 
-```
+test.store <- data.frame(attr(test.model, "probabilities"))
 
-
-Creating df for calculating aucpr
-```{r}
+#Creating df for calculating aucpr
 test.store <- data.frame(attr(test.model, "probabilities"))
 
 scores <- data.frame(test.store$Toxicity, test$Reason.for.discontinuation)
@@ -104,24 +116,21 @@ scores <- data.frame(test.store$Toxicity, test$Reason.for.discontinuation)
 scores <- scores %>%
   mutate(score = case_when((test.Reason.for.discontinuation == "Therapy complete") ~ 0,
          TRUE ~ 1))
-```
 
 
-Calculating aucpr
-```{r}
+#Calculating aucpr
 aucpr <- pr.curve(scores.class0=scores[scores$score=="1",]$test.store.Toxicity,
              scores.class1=scores[scores$score=="0",]$test.store.Toxicity,
              curve=T)
 
 aucpr$auc.integral
-```
+svm_tox_random_aucpr[j, 2] <- aucpr$auc.integral
 
 
-Making a plot
-```{r}
+#Making a plot
 y <- as.data.frame(aucpr$curve)
 ggplot(y, aes(V1, V2))+geom_path()+ylim(0,1)
+}
 ```
-
 
 

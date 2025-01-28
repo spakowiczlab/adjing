@@ -1,5 +1,5 @@
 ---
-title: "svm"
+title: "svm_rec_random"
 author: "Noah Lepola"
 date: "2025-01-14"
 output: html_document
@@ -65,11 +65,24 @@ test$Reason.for.discontinuation <- as.factor(test$Reason.for.discontinuation)
 
 
 ```{r}
-set.seed(13)
+run_number <- 1:10
+seed_list <- c(12345:12369)
+svm_rec_random_aucpr <- data.frame(run = run_number, AUCPR = NA)
+
 ```
 
 
 ```{r}
+for (j in 1:length(run_number)) {
+  
+set.seed(seed_list[j])
+
+train$Reason.for.discontinuation <-
+  (sample(train$Reason.for.discontinuation))
+
+test$Reason.for.discontinuation <-
+  (sample(test$Reason.for.discontinuation))
+
 
 train.model <- svm(`Reason.for.discontinuation` ~ ., 
                    data = train, 
@@ -94,10 +107,8 @@ confusionMatrix(test$Reason.for.discontinuation,
                 positive = "Progression")
 
 test.store <- data.frame(attr(test.model, "probabilities"))
-```
 
-Creating df for calculating aucpr
-```{r}
+#Creating df for calculating aucpr
 test.store <- data.frame(attr(test.model, "probabilities"))
 
 scores <- data.frame(test.store$Progression, test$Reason.for.discontinuation)
@@ -105,23 +116,21 @@ scores <- data.frame(test.store$Progression, test$Reason.for.discontinuation)
 scores <- scores %>%
   mutate(score = case_when((test.Reason.for.discontinuation == "Therapy complete") ~ 0,
          TRUE ~ 1))
-```
 
 
-Calculating aucpr
-```{r}
+#Calculating aucpr
 aucpr <- pr.curve(scores.class0=scores[scores$score=="1",]$test.store.Progression,
              scores.class1=scores[scores$score=="0",]$test.store.Progression,
              curve=T)
 
 aucpr$auc.integral
-```
+svm_rec_random_aucpr[j, 2] <- aucpr$auc.integral
 
 
-Making a plot
-```{r}
+#Making a plot
 y <- as.data.frame(aucpr$curve)
 ggplot(y, aes(V1, V2))+geom_path()+ylim(0,1)
+}
 ```
 
 

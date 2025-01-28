@@ -12,7 +12,7 @@ library(tidyverse)
 library(ggplot2)
 library(randomForest)
 library(ROCR)
-
+library(PRROC)
 
 
 ```
@@ -28,14 +28,26 @@ load(file = "../Outputs/pt.status")
 
 Splitting by cohort and outcome
 ```{r}
-train.outcomes <- filter(pt.status, Cohort == "Adj", 
-Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Progression")
+sorting <- function(data, cohort, outcome1, outcome2){
+  filter(data, 
+         Cohort == cohort, 
+         Reason.for.discontinuation == outcome1 | 
+           Reason.for.discontinuation == outcome2)  
+}
+  
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete", 
+                          "Progression")
+
 train.outcomes <- arrange(train.outcomes, desc(Sample))
 
-test.outcomes <- filter(pt.status, Cohort == "Adj Validation",
-Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Progression")
+
+test.outcomes <- sorting(pt.status, 
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Progression")
+
 test.outcomes <- arrange(test.outcomes, desc(Sample))
 
 
@@ -49,16 +61,33 @@ test.seq <- arrange(test.seq, desc(Sample))
 
 Limiting to most differential genes(16) as determined by logistic regression as narrowing it to those produced the highest AUCPR 
 ```{r}
-train.seq <- train.seq %>% select(Sample, CD3D, HAVCR2, AHR, PVRIG, VTCN1,
- `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3,
- ZBTB7B, GZMB, CD160, IFNG)
+train.seq <- train.seq %>% select(Sample, 
+ #                                  CD3D, HAVCR2, AHR, PVRIG, VTCN1,
+ # `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3,
+ # ZBTB7B, GZMB, CD160, IFNG
+# PVRIG, BCL6
+VTCN1, CD160, NECTIN2
+# , `IL-21`
+ )
 
-test.seq <- test.seq %>% select(Sample, CD3D, HAVCR2, AHR, PVRIG, VTCN1,
- `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3,
- ZBTB7B, GZMB, CD160, IFNG)
+test.seq <- test.seq %>% select(Sample, 
+ #                                  CD3D, HAVCR2, AHR, PVRIG, VTCN1,
+ # `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3,
+ # ZBTB7B, GZMB, CD160, IFNG
+# PVRIG, BCL6
+VTCN1, CD160, NECTIN2
+# , `IL-21`
+ )
 
-train.outcomes <- train.outcomes %>% select(Sample, `Reason.for.discontinuation`)
-test.outcomes <- test.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+train.outcomes <- 
+  train.outcomes %>% 
+  select(Sample, `Reason.for.discontinuation`)
+
+
+test.outcomes <- 
+  test.outcomes %>% 
+  select(Sample,
+         `Reason.for.discontinuation`)
 ```
 
 

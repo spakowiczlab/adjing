@@ -23,23 +23,30 @@ load(file = "../Outputs/pt.status")
 
 Splitting by cohort and outcome
 ```{r}
-adj.char <- left_join(gene.exp, xgb.char, by = join_by("Sample" == "Sample" ))
+adj.char <- left_join(gene.exp, xgb.char,
+                      by = join_by("Sample" == "Sample" ))
 
-adj.outcomes <- filter(pt.status, Cohort == "Adj", 
-Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Toxicity")
+adj.outcomes <- filter(pt.status, 
+                       Cohort == "Adj", 
+                       Reason.for.discontinuation == "Therapy complete" | 
+                         Reason.for.discontinuation == "Toxicity")
 
-val.outcomes <- filter(pt.status, Cohort == "Adj Validation",
-Reason.for.discontinuation == "Therapy complete" |
-  Reason.for.discontinuation == "Toxicity")
+val.outcomes <- filter(pt.status, 
+                       Cohort == "Adj Validation", 
+                       Reason.for.discontinuation == "Therapy complete" |
+                         Reason.for.discontinuation == "Toxicity")
 
 g.and.c.data.adj <- filter(adj.char, (Sample %in% adj.outcomes$Sample))
 
 g.and.c.data.val <- filter(adj.char, (Sample %in% val.outcomes$Sample))
 
-val.data.outcomes <- left_join(val.outcomes, g.and.c.data.val, by = join_by("Sample" == "Sample" ))
+val.data.outcomes <- left_join(val.outcomes,
+                               g.and.c.data.val,
+                               by = join_by("Sample" == "Sample" ))
 
-adj.data.outcomes <- left_join(adj.outcomes, g.and.c.data.adj, by = join_by("Sample" == "Sample" ))
+adj.data.outcomes <- left_join(adj.outcomes,
+                               g.and.c.data.adj,
+                               by = join_by("Sample" == "Sample" ))
 
 ```
 
@@ -47,27 +54,40 @@ adj.data.outcomes <- left_join(adj.outcomes, g.and.c.data.adj, by = join_by("Sam
 ```{r}
 train.data <- adj.data.outcomes %>%
   select(-Sample, -Reason.for.discontinuation, -Cohort)
+
 train.label <- adj.data.outcomes %>%
-  select(Reason.for.discontinuation) %>% mutate(Reason.for.discontinuation = case_when(
-  Reason.for.discontinuation == "Therapy complete" ~ 0,
-  TRUE ~ 1))
+  select(Reason.for.discontinuation) %>% 
+  mutate(Reason.for.discontinuation = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 0, TRUE ~ 1))
+
+
 
 test.data <- val.data.outcomes %>%
   select(-Sample, -Reason.for.discontinuation, -Cohort)
-test.label <- val.data.outcomes %>%
-  select(Reason.for.discontinuation) %>% mutate(Reason.for.discontinuation = case_when(
-  Reason.for.discontinuation == "Therapy complete" ~ 0,
-  TRUE ~ 1))
 
-xgb.train = xgb.DMatrix(data = as.matrix(train.data), label = as.matrix(train.label))
-xgb.test = xgb.DMatrix(data = as.matrix(test.data), label = as.matrix(test.label))
+test.label <- val.data.outcomes %>%
+  select(Reason.for.discontinuation) %>% 
+  mutate(Reason.for.discontinuation = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 0, TRUE ~ 1))
+
+xgb.train = xgb.DMatrix(data = as.matrix(train.data),
+                        label = as.matrix(train.label))
+
+xgb.test = xgb.DMatrix(data = as.matrix(test.data), 
+                       label = as.matrix(test.label))
+
 
 watchlist = list(train=xgb.train, test=xgb.test)
 
-xgbtest = xgb.train(data = xgb.train, max.depth = 3, eta = 0.01,
-                    watchlist = watchlist, nrounds = 100,
-                    objective = "binary:logistic", eval_metric = 'aucpr',
-                    scale_pos_weight = 1)
+xgbtest = xgb.train(data = xgb.train, 
+                    max.depth = 3, 
+                    eta = 0.01,
+                    watchlist = watchlist,
+                    nrounds = 1000,
+                    objective = "binary:logistic",
+                    eval_metric = 'aucpr',
+                    scale_pos_weight = 1,
+                    early_stopping_rounds = 100)
 
 
 importance_matrix <- xgb.importance(model = xgbtest)

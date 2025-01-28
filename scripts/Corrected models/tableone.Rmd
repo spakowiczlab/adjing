@@ -10,8 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tableone)
 library(tidyverse)
-library(officer)
-library(flextable)
 
 ```
 
