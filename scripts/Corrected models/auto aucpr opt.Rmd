@@ -1,0 +1,215 @@
+---
+title: "auto aucpr opt"
+author: "Noah Lepola"
+date: "2025-03-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(dplyr)
+
+```
+
+Loading file
+```{r}
+
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status_no_ipi")
+load(file = "../Outputs/logr_pro_adj_no_ipi")
+load(file = "../Outputs/logr_tox_adj_no_ipi")
+load(file = "../Outputs/rec_split_chr_adj_no_ipi")
+load(file = "../Outputs/tox_split_chr_adj_no_ipi")
+# load(file = "../Outputs/logr_pro_adj")
+# load(file = "../Outputs/logr_tox_adj")
+# load(file = "../Outputs/pt.status")
+# load(file = "../Outputs/rec_split_chr_adj")
+# load(file = "../Outputs/tox_split_chr_adj")
+
+```
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+```{r}
+logr_pro_adj <- logr_pro_adj[order(logr_pro_adj$p.value), ]
+logr_tox_adj <- logr_tox_adj[order(logr_tox_adj$p.value), ]
+print(logr_pro_adj$gene)
+```
+
+```{r}
+source("../rf_functions.R")
+```
+
+Splitting the cohorts into the 
+```{r}
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete", 
+                          "Progression")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(pt.status, 
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Progression") 
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+```
+
+```{r}
+#note this section is for rec no ipi
+train.outcomes <-
+  train.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+test.outcomes <-
+  test.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+# train.seq <- train.seq %>% select(Sample,
+# PTPRC_2, KIR_Activating_Subgroup_1, CD127,  CD80, TNF, GRAIL, CD200R1, PDCD1, SPI1, GUSB, CCR4, YWHAZ, HPRT1, CEACAM1, ITCH, PTPRC_3, RUNX3, TGFB1, KIR_Activating_Subgroup_2, CD96, PTPRC_1, UBC, GATA3, EOMES, B3GAT1, CD8A, RORC, CD86, RORA, `IL-10`, PRDM1, PGK1, TBX21, `IL-4`, CD3E, IL6, CD274, `IL-17A`, BCL6, PVR, `CDKN2A (ARF)`, PDCD1LG2, TNFRSF18, FOXO1, KIR_Inhibiting_Subgroup_2, IFNG, CD27, CD276, `IL-2`, IL2RA, NECTIN2, C10orf54, LAG3, EGR1, CTLA4, `IL-21`, `CDKN2A (p16)`, CDKN1B, CD244, CD4, CCR6, SPN, TNFRSF14, KIR_Inhibiting_Subgroup_1, TIGIT, GZMB, VTCN1, FOXP3, ADORA2A, CD28, CXCR3, CD160, KLRG1, BTLA, ZBTB7B, CD3D, AHR, HAVCR2, PVRIG)
+# test.seq <- test.seq %>% select(Sample,
+# PTPRC_2, KIR_Activating_Subgroup_1, CD127,  CD80, TNF, GRAIL, CD200R1, PDCD1, SPI1, GUSB, CCR4, YWHAZ, HPRT1, CEACAM1, ITCH, PTPRC_3, RUNX3, TGFB1, KIR_Activating_Subgroup_2, CD96, PTPRC_1, UBC, GATA3, EOMES, B3GAT1, CD8A, RORC, CD86, RORA, `IL-10`, PRDM1, PGK1, TBX21, `IL-4`, CD3E, IL6, CD274, `IL-17A`, BCL6, PVR, `CDKN2A (ARF)`, PDCD1LG2, TNFRSF18, FOXO1, KIR_Inhibiting_Subgroup_2, IFNG, CD27, CD276, `IL-2`, IL2RA, NECTIN2, C10orf54, LAG3, EGR1, CTLA4, `IL-21`, `CDKN2A (p16)`, CDKN1B, CD244, CD4, CCR6, SPN, TNFRSF14, KIR_Inhibiting_Subgroup_1, TIGIT, GZMB, VTCN1, FOXP3, ADORA2A, CD28, CXCR3, CD160, KLRG1, BTLA, ZBTB7B, CD3D, AHR, HAVCR2, PVRIG)
+
+# top.c <- pt.char %>% select(Sample, Therapy, `BMI (kg/m2)`, `Platelets (K/uL)`,
+#                             `LDH (U/L)`, Stage, Age)
+# train.seq <- left_join(train.seq, top.c)
+# test.seq <- left_join(test.seq, top.c)
+
+
+```
+
+```{r}
+#note this section is for rec
+
+# train.seq <- train.seq %>% select(Sample,
+# TBX21, PTPRC_1, KIR_Activating_Subgroup_2, CD3E, GUSB, B3GAT1, PDCD1LG2, CD8A, RUNX3, CEACAM1, PDCD1, KIR_Activating_Subgroup_1, CCR4, CD200R1, TNF, CD80, PTPRC_2, `CDKN2A (p16)`, RORA, CD96, `IL-4`, KIR_Inhibiting_Subgroup_2, EOMES, HPRT1, TGFB1, SPI1, CD27, RORC, CD4, GATA3, UBC, FOXP3, CD127, GRAIL, TIGIT, SPN, `IL-21`, TNFRSF18, FOXO1, EGR1, IL6, YWHAZ, PRDM1, ADORA2A, ITCH, PTPRC_3, PVR, TNFRSF14, C10orf54, CD86, CDKN1B, `IL-17A`, CCR6, `IL-10`, BTLA, LAG3, PGK1, `IL-2`, BCL6, IL2RA, KLRG1, CD276, NECTIN2, IFNG, CD160, GZMB, ZBTB7B, CXCR3, CD244, CD274, `CDKN2A (ARF)`, CD28, CTLA4, KIR_Inhibiting_Subgroup_1, VTCN1, PVRIG, AHR, HAVCR2, CD3D)
+# 
+# test.seq <- test.seq %>% select(Sample,
+# TBX21, PTPRC_1, KIR_Activating_Subgroup_2, CD3E, GUSB, B3GAT1, PDCD1LG2, CD8A, RUNX3, CEACAM1, PDCD1, KIR_Activating_Subgroup_1, CCR4, CD200R1, TNF, CD80, PTPRC_2, `CDKN2A (p16)`, RORA, CD96, `IL-4`, KIR_Inhibiting_Subgroup_2, EOMES, HPRT1, TGFB1, SPI1, CD27, RORC, CD4, GATA3, UBC, FOXP3, CD127, GRAIL, TIGIT, SPN, `IL-21`, TNFRSF18, FOXO1, EGR1, IL6, YWHAZ, PRDM1, ADORA2A, ITCH, PTPRC_3, PVR, TNFRSF14, C10orf54, CD86, CDKN1B, `IL-17A`, CCR6, `IL-10`, BTLA, LAG3, PGK1, `IL-2`, BCL6, IL2RA, KLRG1, CD276, NECTIN2, IFNG, CD160, GZMB, ZBTB7B, CXCR3, CD244, CD274, `CDKN2A (ARF)`, CD28, CTLA4, KIR_Inhibiting_Subgroup_1, VTCN1, PVRIG, AHR, HAVCR2, CD3D)
+```
+
+
+```{r}
+#note this section is for tox no ipi
+
+# train.seq <- train.seq %>% select(Sample,
+# `IL-17A`, IL2RA, CD127, CD96, PVRIG, CD28, PVR, CD8A, GUSB, `IL-21`, CD3E, CTLA4, KIR_Activating_Subgroup_2, CD3D, CD274, CD27, RORC, CEACAM1, YWHAZ, CD244, RORA, CD4, C10orf54, CCR6, IL6, BCL6, UBC, PRDM1, `CDKN2A (p16)`, VTCN1, FOXO1, ZBTB7B, ADORA2A,TGFB1, EGR1, CD200R1, `IL-4`, CD86, TNFRSF18, KLRG1, CXCR3, `CDKN2A (ARF)`, SPN, KIR_Activating_Subgroup_1, ITCH, TNFRSF14, CD80, IFNG, `IL-2`, CD276, AHR, HAVCR2, LAG3, KIR_Inhibiting_Subgroup_1, SPI1, GATA3, PTPRC_3, FOXP3, BTLA, PTPRC_2, CD160, HPRT1, PDCD1, PGK1, RUNX3, TNF, KIR_Inhibiting_Subgroup_2, CDKN1B, EOMES, GRAIL, TBX21, `IL-10`, NECTIN2, TIGIT, B3GAT1, GZMB, CCR4,
+# PTPRC_1, 
+# PDCD1LG2
+# )
+# test.seq <- test.seq %>% select(Sample,
+# `IL-17A`, IL2RA, CD127, CD96, PVRIG, CD28, PVR, CD8A, GUSB, `IL-21`, CD3E, CTLA4, KIR_Activating_Subgroup_2, CD3D, CD274, CD27, RORC, CEACAM1, YWHAZ, CD244, RORA, CD4, C10orf54, CCR6, IL6, BCL6, UBC, PRDM1, `CDKN2A (p16)`, VTCN1, FOXO1, ZBTB7B, ADORA2A,TGFB1, EGR1, CD200R1, `IL-4`, CD86, TNFRSF18, KLRG1, CXCR3, `CDKN2A (ARF)`, SPN, KIR_Activating_Subgroup_1, ITCH, TNFRSF14, CD80, IFNG, `IL-2`, CD276, AHR, HAVCR2, LAG3, KIR_Inhibiting_Subgroup_1, SPI1, GATA3, PTPRC_3, FOXP3, BTLA, PTPRC_2, CD160, HPRT1, PDCD1, PGK1, RUNX3, TNF, KIR_Inhibiting_Subgroup_2, CDKN1B, EOMES, GRAIL, TBX21, `IL-10`, NECTIN2, TIGIT, B3GAT1, GZMB, CCR4,
+# PTPRC_1, 
+# PDCD1LG2
+# )
+# 
+```
+
+```{r}
+#note this is for tox
+# train.seq <- train.seq %>% select(Sample,
+# CD200R1, ADORA2A, CD4, CD28, CD3E, `CDKN2A (p16)`, CD244, KIR_Activating_Subgroup_2, `IL-21`, `IL-17A`, IL2RA, ZBTB7B, PVRIG, BCL6, CD8A, CTLA4, EGR1, CEACAM1, GUSB, KIR_Activating_Subgroup_1, CD96, PRDM1, CD80, PVR, CD27, BTLA, CD86, ITCH, IL6, CD3D, SPN, FOXP3, RORA, `IL-4`, UBC, PDCD1, RORC, CD160, CD276, VTCN1, CD127, PTPRC_3, C10orf54, KIR_Inhibiting_Subgroup_1, GATA3, CD274, SPI1, YWHAZ, FOXO1, TNFRSF14, TIGIT, IFNG, CCR6, `IL-2`, TGFB1, LAG3, `CDKN2A (ARF)`, PTPRC_2, CXCR3, GRAIL, AHR, KLRG1, EOMES, TNFRSF18, PGK1, CCR4, TBX21, TNF, GZMB, `IL-10`, PTPRC_1, HAVCR2, HPRT1, B3GAT1, CDKN1B, RUNX3, KIR_Inhibiting_Subgroup_2, NECTIN2, PDCD1LG2)
+# 
+# test.seq <- test.seq %>% select(Sample,
+# CD200R1, ADORA2A, CD4, CD28, CD3E, `CDKN2A (p16)`, CD244, KIR_Activating_Subgroup_2, `IL-21`, `IL-17A`, IL2RA, ZBTB7B, PVRIG, BCL6, CD8A, CTLA4, EGR1, CEACAM1, GUSB, KIR_Activating_Subgroup_1, CD96, PRDM1, CD80, PVR, CD27, BTLA, CD86, ITCH, IL6, CD3D, SPN, FOXP3, RORA, `IL-4`, UBC, PDCD1, RORC, CD160, CD276, VTCN1, CD127, PTPRC_3, C10orf54, KIR_Inhibiting_Subgroup_1, GATA3, CD274, SPI1, YWHAZ, FOXO1, TNFRSF14, TIGIT, IFNG, CCR6, `IL-2`, TGFB1, LAG3, `CDKN2A (ARF)`, PTPRC_2, CXCR3, GRAIL, AHR, KLRG1, EOMES, TNFRSF18, PGK1, CCR4, TBX21, TNF, GZMB, `IL-10`, PTPRC_1, HAVCR2, HPRT1, B3GAT1, CDKN1B, RUNX3, KIR_Inhibiting_Subgroup_2, NECTIN2, PDCD1LG2)
+
+```
+
+
+```{r}
+#note this is for rec increasing p value no ipi
+train.seq <- train.seq %>% select(Sample,
+PVRIG, HAVCR2, AHR, CD3D, ZBTB7B, BTLA, KLRG1, CD160, CXCR3, CD28, ADORA2A, FOXP3, VTCN1, GZMB, TIGIT, KIR_Inhibiting_Subgroup_1, TNFRSF14, SPN, CCR6, CD4, CD244, CDKN1B, `CDKN2A (p16)`, `IL-21`, CTLA4, EGR1, LAG3, C10orf54, NECTIN2, IL2RA, `IL-2`, CD276, CD27, IFNG, KIR_Inhibiting_Subgroup_2, FOXO1, TNFRSF18, PDCD1LG2, `CDKN2A (ARF)`, PVR, BCL6, `IL-17A`, CD274, IL6, CD3E, `IL-4`, TBX21, PGK1, PRDM1, `IL-10`, RORA, CD86, RORC, CD8A, B3GAT1, EOMES, GATA3, UBC, PTPRC_1, CD96, KIR_Activating_Subgroup_2, TGFB1, RUNX3, PTPRC_3, ITCH, CEACAM1, HPRT1, YWHAZ, CCR4, GUSB, SPI1, PDCD1, CD200R1, GRAIL, TNF, CD80, CD127, KIR_Activating_Subgroup_1, PTPRC_2
+)
+
+test.seq <- test.seq %>% select(Sample,
+PVRIG, HAVCR2, AHR, CD3D, ZBTB7B, BTLA, KLRG1, CD160, CXCR3, CD28, ADORA2A, FOXP3, VTCN1, GZMB, TIGIT, KIR_Inhibiting_Subgroup_1, TNFRSF14, SPN, CCR6, CD4, CD244, CDKN1B, `CDKN2A (p16)`, `IL-21`, CTLA4, EGR1, LAG3, C10orf54, NECTIN2, IL2RA, `IL-2`, CD276, CD27, IFNG, KIR_Inhibiting_Subgroup_2, FOXO1, TNFRSF18, PDCD1LG2, `CDKN2A (ARF)`, PVR, BCL6, `IL-17A`, CD274, IL6, CD3E, `IL-4`, TBX21, PGK1, PRDM1, `IL-10`, RORA, CD86, RORC, CD8A, B3GAT1, EOMES, GATA3, UBC, PTPRC_1, CD96, KIR_Activating_Subgroup_2, TGFB1, RUNX3, PTPRC_3, ITCH, CEACAM1, HPRT1, YWHAZ, CCR4, GUSB, SPI1, PDCD1, CD200R1, GRAIL, TNF, CD80, CD127, KIR_Activating_Subgroup_1, PTPRC_2
+)
+```
+
+```{r}
+#note this is for rec increasing p value
+# train.seq <- train.seq %>% select(Sample,
+# CD3D, HAVCR2, AHR, PVRIG, VTCN1, KIR_Inhibiting_Subgroup_1,CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3, ZBTB7B, GZMB, CD160, IFNG, NECTIN2, CD276, KLRG1, IL2RA, BCL6, `IL-2`, PGK1, LAG3, BTLA, `IL-10`, CCR6, `IL-17A`, CDKN1B, CD86, C10orf54, TNFRSF14, PVR, PTPRC_3, ITCH, ADORA2A, PRDM1, YWHAZ, IL6, EGR1, FOXO1, TNFRSF18, `IL-21`, SPN, TIGIT, GRAIL, CD127, FOXP3, UBC, GATA3, CD4, RORC, CD27, SPI1, TGFB1, HPRT1, EOMES, KIR_Inhibiting_Subgroup_2, `IL-4`, CD96, RORA, `CDKN2A (p16)`, PTPRC_2, CD80, TNF, CD200R1, CCR4, KIR_Activating_Subgroup_1, PDCD1, CEACAM1, RUNX3, CD8A, PDCD1LG2, B3GAT1, GUSB, CD3E, KIR_Activating_Subgroup_2, PTPRC_1, TBX21
+# )
+# 
+# test.seq <- test.seq %>% select(Sample,
+# CD3D, HAVCR2, AHR, PVRIG, VTCN1, KIR_Inhibiting_Subgroup_1,CTLA4, CD28, `CDKN2A (ARF)`, CD274, CD244, CXCR3, ZBTB7B, GZMB, CD160, IFNG, NECTIN2, CD276, KLRG1, IL2RA, BCL6, `IL-2`, PGK1, LAG3, BTLA, `IL-10`, CCR6, `IL-17A`, CDKN1B, CD86, C10orf54, TNFRSF14, PVR, PTPRC_3, ITCH, ADORA2A, PRDM1, YWHAZ, IL6, EGR1, FOXO1, TNFRSF18, `IL-21`, SPN, TIGIT, GRAIL, CD127, FOXP3, UBC, GATA3, CD4, RORC, CD27, SPI1, TGFB1, HPRT1, EOMES, KIR_Inhibiting_Subgroup_2, `IL-4`, CD96, RORA, `CDKN2A (p16)`, PTPRC_2, CD80, TNF, CD200R1, CCR4, KIR_Activating_Subgroup_1, PDCD1, CEACAM1, RUNX3, CD8A, PDCD1LG2, B3GAT1, GUSB, CD3E, KIR_Activating_Subgroup_2, PTPRC_1, TBX21
+# )
+```
+
+```{r}
+#note this is for tox increasing p value no ipi
+# train.seq <- train.seq %>% select(Sample,
+# PDCD1LG2, PTPRC_1, CCR4, GZMB, B3GAT1, TIGIT, NECTIN2, `IL-10`, TBX21, GRAIL, EOMES, CDKN1B, KIR_Inhibiting_Subgroup_2, TNF, RUNX3, PGK1, PDCD1, HPRT1, CD160, PTPRC_2, BTLA, FOXP3, PTPRC_3, GATA3, SPI1, KIR_Inhibiting_Subgroup_1, LAG3, HAVCR2, AHR, CD276, `IL-2`, IFNG, CD80, TNFRSF14, ITCH, KIR_Activating_Subgroup_1,SPN, `CDKN2A (ARF)`, CXCR3, KLRG1, TNFRSF18, CD86, `IL-4`, CD200R1, EGR1, TGFB1, ADORA2A, ZBTB7B, FOXO1, VTCN1, `CDKN2A (p16)`, PRDM1, UBC, BCL6, IL6, CCR6, C10orf54, CD4, RORA, CD244, YWHAZ, CEACAM1, RORC, CD27, CD274, CD3D, KIR_Activating_Subgroup_2, CTLA4, CD3E, `IL-21`, GUSB, CD8A, PVR, CD28, PVRIG, CD96, CD127, IL2RA, `IL-17A`
+# )
+# 
+# test.seq <- test.seq %>% select(Sample,
+# PDCD1LG2, PTPRC_1, CCR4, GZMB, B3GAT1, TIGIT, NECTIN2, `IL-10`, TBX21, GRAIL, EOMES, CDKN1B, KIR_Inhibiting_Subgroup_2, TNF, RUNX3, PGK1, PDCD1, HPRT1, CD160, PTPRC_2, BTLA, FOXP3, PTPRC_3, GATA3, SPI1, KIR_Inhibiting_Subgroup_1, LAG3, HAVCR2, AHR, CD276, `IL-2`, IFNG, CD80, TNFRSF14, ITCH, KIR_Activating_Subgroup_1,SPN, `CDKN2A (ARF)`, CXCR3, KLRG1, TNFRSF18, CD86, `IL-4`, CD200R1, EGR1, TGFB1, ADORA2A, ZBTB7B, FOXO1, VTCN1, `CDKN2A (p16)`, PRDM1, UBC, BCL6, IL6, CCR6, C10orf54, CD4, RORA, CD244, YWHAZ, CEACAM1, RORC, CD27, CD274, CD3D, KIR_Activating_Subgroup_2, CTLA4, CD3E, `IL-21`, GUSB, CD8A, PVR, CD28, PVRIG, CD96, CD127, IL2RA, `IL-17A`
+# )
+```
+
+```{r}
+#note this is for tox increasing p value
+# train.seq <- train.seq %>% select(Sample,
+# PDCD1LG2, NECTIN2, KIR_Inhibiting_Subgroup_2, RUNX3, CDKN1B, B3GAT1, HPRT1, HAVCR2, PTPRC_1, `IL-10`, GZMB, TNF, TBX21, CCR4, PGK1, TNFRSF18, EOMES, KLRG1, AHR, GRAIL, CXCR3, PTPRC_2, `CDKN2A (ARF)`, LAG3, TGFB1, `IL-2`, CCR6, IFNG, TIGIT, TNFRSF14, FOXO1, YWHAZ, SPI1, CD274, GATA3, KIR_Inhibiting_Subgroup_1,C10orf54, PTPRC_3, CD127, VTCN1, CD276, CD160, RORC, PDCD1, UBC, `IL-4`, RORA, FOXP3, SPN, CD3D, IL6, ITCH, CD86, BTLA, CD27, PVR, CD80, PRDM1, CD96, KIR_Activating_Subgroup_1,GUSB, CEACAM1, EGR1, CTLA4, CD8A, BCL6, PVRIG, ZBTB7B, IL2RA, `IL-17A`, `IL-21`, KIR_Activating_Subgroup_2,CD244, `CDKN2A (p16)`, CD3E, CD28, CD4, ADORA2A, CD200R1
+# )
+# 
+# test.seq <- test.seq %>% select(Sample,
+# PDCD1LG2, NECTIN2, KIR_Inhibiting_Subgroup_2, RUNX3, CDKN1B, B3GAT1, HPRT1, HAVCR2, PTPRC_1, `IL-10`, GZMB, TNF, TBX21, CCR4, PGK1, TNFRSF18, EOMES, KLRG1, AHR, GRAIL, CXCR3, PTPRC_2, `CDKN2A (ARF)`, LAG3, TGFB1, `IL-2`, CCR6, IFNG, TIGIT, TNFRSF14, FOXO1, YWHAZ, SPI1, CD274, GATA3, KIR_Inhibiting_Subgroup_1,C10orf54, PTPRC_3, CD127, VTCN1, CD276, CD160, RORC, PDCD1, UBC, `IL-4`, RORA, FOXP3, SPN, CD3D, IL6, ITCH, CD86, BTLA, CD27, PVR, CD80, PRDM1, CD96, KIR_Activating_Subgroup_1,GUSB, CEACAM1, EGR1, CTLA4, CD8A, BCL6, PVRIG, ZBTB7B, IL2RA, `IL-17A`, `IL-21`, KIR_Activating_Subgroup_2,CD244, `CDKN2A (p16)`, CD3E, CD28, CD4, ADORA2A, CD200R1
+# )
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+opt_aucpr <- data.frame(genes = 79:1, Avg.Rec.no.ipi.increase.p = NA)
+
+for (i in 1:79) {
+rf_rec_top_char <- kTest(seed_list, "Therapy complete", "Progression") 
+
+aucprs <- grabVals(aucprs, rf_rec_top_char, seed_list)
+
+avg <- mean(aucprs$AUCPR)
+
+opt_aucpr$Avg.Rec.no.ipi.increase.p[i] <- avg
+x = length(train.seq)
+train.seq <- train.seq[-x]
+test.seq <- test.seq[-x]
+
+Sys.sleep(5)
+}
+
+
+
+```

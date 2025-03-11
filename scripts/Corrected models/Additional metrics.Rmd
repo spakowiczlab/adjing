@@ -1,0 +1,155 @@
+---
+title: "Additional metrics script"
+author: "Noah Lepola"
+date: "2025-03-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(caret)
+library(tidyverse)
+
+```
+
+```{r}
+source("../rf_functions.R")
+```
+
+Loading all the files needed. First in each section is the actual run data, second is the 1000x random shuffle runs
+```{r}
+rf_rec <- readRDS(file = "../Outputs/rf_rec.RData")
+rf_rec_random_25000<- readRDS(file = "../Outputs/rf_rec_random_25000.RData")
+
+rf_rec_top <- readRDS(file = "../Outputs/rf_rec_top.RData")
+rf_rec_top_random_25000<- readRDS(file = "../Outputs/rf_rec_top_random_25000.RData")
+
+rf_rec_top_alt_top <- readRDS(file = "../Outputs/rf_rec_top_alt_top.RData")
+rf_rec_top_alt_top_random_25000<- readRDS(file = "../Outputs/rf_rec_top_alt_top_random_25000.RData")
+
+rf_rec_top_xgboost <- readRDS(file = "../Outputs/rf_rec_top_xgboost.RData")
+rf_rec_top_xgboost_random_25000<- readRDS(file = "../Outputs/rf_rec_top_xgboost_random_25000.RData")
+
+rf_rec_top_char <- readRDS(file = "../Outputs/rf_rec_top_char.RData")
+rf_rec_top_char_random_25000<- readRDS(file = "../Outputs/rf_rec_top_char_random_25000.RData")
+
+
+
+rf_tox <- readRDS(file = "../Outputs/rf_tox.RData")
+rf_tox_random_25000<- readRDS(file = "../Outputs/rf_tox_random_25000.RData")
+
+rf_tox_top <- readRDS(file = "../Outputs/rf_tox_top.RData")
+rf_tox_top_random_25000<- readRDS(file = "../Outputs/rf_tox_top_random_25000.RData")
+
+rf_tox_top_alt_top <- readRDS(file = "../Outputs/rf_tox_top_alt_top.RData")
+rf_tox_top_alt_top_random_25000<- readRDS(file = "../Outputs/rf_tox_top_alt_top_random_25000.RData")
+
+rf_tox_top_xgboost <- readRDS(file = "../Outputs/rf_tox_top_xgboost.RData")
+rf_tox_top_xgboost_random_25000<- readRDS(file = "../Outputs/rf_tox_top_xgboost_random_25000.RData")
+
+rf_tox_top_char <- readRDS(file = "../Outputs/rf_tox_top_char.RData")
+rf_tox_top_char_random_25000<- readRDS(file = "../Outputs/rf_tox_top_char_random_25000.RData")
+
+
+```
+
+
+```{r}
+# rec_met <- add.metrics(rf_rec_random_25000, rec_met, "Progression")
+# rec_top_met <- add.metrics(rf_rec_top_random_25000, rec_top_met, "Progression")
+# rec_alt_met <- add.metrics(rf_rec_top_alt_top_random_25000, rec_alt_met, "Progression")
+# rec_xgb_met <- add.metrics(rf_rec_top_xgboost_random_25000, rec_xgb_met, "Progression")
+# rec_top_char_met <- add.metrics(rf_rec_top_char_random_25000, rec_top_char_met, "Progression")
+# 
+# tox_met <- add.metrics(rf_tox_random_25000, tox_met, "Toxicity")
+# tox_top_met <- add.metrics(rf_tox_top_random_25000, tox_top_met, "Toxicity")
+# tox_alt_met <- add.metrics(rf_tox_top_alt_top_random_25000, tox_alt_met, "Toxicity")
+# tox_xgb_met <- add.metrics(rf_tox_top_xgboost_random_25000, tox_xgb_met, "Toxicity")
+# tox_top_char_met <- add.metrics(rf_tox_top_char_random_25000, tox_top_char_met, "Toxicity")
+
+```
+
+Creating a function to get the average from each run of the 1000x random and then calculate the percentile of the normal run
+```{r}
+met.p.calc <- function(randomdata, pos.outcome, output, dataobject){
+#function that generates averages of metrics for randomized run
+  random_met <- add.metrics(randomdata,
+                            random_met,
+                            pos.outcome)
+
+#storing experimental run additional metrics   
+    temp_conmat2 <- data.frame(run = 1:25,
+                               Accuracy = NA,
+                               Specificity = NA,
+                               Precision = NA,
+                               Recall = NA,
+                               F1 = NA)
+    
+#generating additional metrics for experimental run    
+  for (i in 1:25) {
+    temp_conmat <- confusionMatrix(dataobject[[i]][[1]][[3]],
+                                   positive = pos.outcome)
+    
+    temp_conmat2$Accuracy[i] <- temp_conmat[[3]][1]
+    
+    temp_conmat2$Specificity[i] <- temp_conmat[[4]][2]
+    
+    temp_conmat2$Precision[i] <- temp_conmat[[4]][5]
+    
+    temp_conmat2$Recall[i] <- temp_conmat[[4]][6]
+    
+    temp_conmat2$F1[i] <- temp_conmat[[4]][7]
+    
+  }
+#storing percentiles    
+    output <- data.frame(Accuracy = NA,
+                         Specificity = NA,
+                         Precision = NA,
+                         Recall = NA,
+                         F1 = NA)
+#converting NAs to 0 so we don't skew the averages    
+      temp_conmat2[is.na(temp_conmat2)] <- 0
+#percentile calculation for various metrics      
+avg.acc <- mean(temp_conmat2$Accuracy)
+output$Accuracy[1] <- p.calc(avg.acc,
+                             random_met$Avg.Accuracy)
+
+avg.s <- mean(temp_conmat2$Specificity)
+output$Specificity[1] <- p.calc(avg.s,
+                                random_met$Avg.Specificity)
+
+avg.prec <- mean(temp_conmat2$Precision)
+output$Precision[1] <- p.calc(avg.prec,
+                              random_met$Avg.Precision)
+
+avg.recall <- mean(temp_conmat2$Recall)
+output$Recall[1] <- p.calc(avg.recall,
+                           random_met$Avg.Recall)
+
+avg.F1 <- mean(temp_conmat2$F1)
+output$F1[1] <- p.calc(avg.F1,
+                       random_met$Avg.F1)
+
+output
+}
+
+# test1 <- add.metrics(rf_rec_random_25000, test1, "Progression")
+# rec_met_perc <- met.p.calc(rf_rec_random_25000, "Progression", rec_met_perc, rf_rec)
+# rec_top_met_perc <- met.p.calc(rf_rec_top_random_25000, "Progression", rec_top_met_perc, rf_rec_top)
+rec_alt_met_perc <- met.p.calc(rf_rec_top_alt_top_random_25000, "Progression", rec_alt_met_perc, rf_rec_top_alt_top)
+# rec_xgb_met_perc <- met.p.calc(rf_rec_top_xgboost_random_25000, "Progression", rec_xgb_met_perc, rf_rec_top_xgboost)
+# rec_top_char_perc <- met.p.calc(rf_rec_top_char_random_25000, "Progression", rec_top_char_perc, rf_rec_top_char)
+
+# tox_met_perc <- met.p.calc(rf_tox_random_25000, "Toxicity", tox_met_perc, rf_tox)
+# tox_top_met_perc <- met.p.calc(rf_tox_top_random_25000, "Toxicity", tox_top_met_perc, rf_tox_top)
+tox_alt_met_perc <- met.p.calc(rf_tox_top_alt_top_random_25000, "Toxicity", tox_alt_met_perc, rf_tox_top_alt_top)
+# tox_xgb_met_perc <- met.p.calc(rf_tox_top_xgboost_random_25000, "Toxicity", tox_xgb_met_perc, rf_tox_top_xgboost)
+# tox_top_char_perc <- met.p.calc(rf_tox_top_char_random_25000, "Toxicity", tox_top_char_perc, rf_tox_top_char)
+
+
+```
+
+
+
+

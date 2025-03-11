@@ -1,0 +1,194 @@
+---
+title: "svm_rec_for_osc"
+author: "Noah Lepola"
+date: "2025-01-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(e1071)
+library(caret)
+library(PRROC)
+
+```
+
+
+Loading files
+```{r}
+load(file = "../Outputs/xgb.char")
+load(file = "../Outputs/pt.status")
+load(file = "../Outputs/gene.exp")
+```
+
+joining everything to run in svm
+```{r}
+status.char <- left_join(pt.status, xgb.char)
+status.char.exp <- left_join(status.char, gene.exp)
+
+
+```
+
+splitting into testing and training for therapy complete or recurrence
+Removing StageI because svm can't handle all 0
+```{r}
+train <- filter(status.char.exp, 
+                Cohort == "Adj", 
+                Reason.for.discontinuation == "Therapy complete" | 
+                  Reason.for.discontinuation == "Progression") %>% 
+  select(`Reason.for.discontinuation`, 
+         PVRIG, BCL6, CD244
+         
+         )
+
+test <- filter(status.char.exp, 
+               Cohort == "Adj Validation",
+                Reason.for.discontinuation == "Therapy complete" | 
+                  Reason.for.discontinuation == "Progression") %>% 
+  select(`Reason.for.discontinuation`, 
+         PVRIG, BCL6, CD244
+         
+         )
+
+```
+
+
+
+Converting to factor for use in svm
+```{r}
+train$Reason.for.discontinuation <- as.factor(train$Reason.for.discontinuation)
+test$Reason.for.discontinuation <- as.factor(test$Reason.for.discontinuation)
+
+```
+
+
+```{r}
+set.seed(13)
+```
+
+
+```{r}
+
+train.model <- svm(`Reason.for.discontinuation` ~ ., 
+                   data = train, 
+                   probability = TRUE,
+                   type = "C", 
+                   # class.weights=c("Progression"=1.833,
+                   #                 "Therapy complete"=0.6875)
+                   )
+
+test.model <- predict(train.model, 
+                      test, 
+                      probability = TRUE, 
+                      type = "C", 
+                      # class.weights=c("Progression"=1.95,
+                      #                 "Therapy complete"=0.6724138)
+                      )
+
+test.model.df <- data.frame(test.model)
+
+confusionMatrix(test$Reason.for.discontinuation, 
+                test.model.df$test.model, 
+                positive = "Progression")
+
+test.store <- data.frame(attr(test.model, "probabilities"))
+```
+
+Creating df for calculating aucpr
+```{r}
+test.store <- data.frame(attr(test.model, "probabilities"))
+
+scores <- data.frame(test.store$Progression, test$Reason.for.discontinuation)
+
+scores <- scores %>%
+  mutate(score = case_when((test.Reason.for.discontinuation == "Therapy complete") ~ 0,
+         TRUE ~ 1))
+```
+
+
+Calculating aucpr
+```{r}
+aucpr <- pr.curve(scores.class0=scores[scores$score=="1",]$test.store.Progression,
+             scores.class1=scores[scores$score=="0",]$test.store.Progression,
+             curve=T)
+
+aucpr$auc.integral
+```
+
+
+Making a plot
+```{r}
+y <- as.data.frame(aucpr$curve)
+ggplot(y, aes(V1, V2))+geom_path()+ylim(0,1)
+```
+
+```{r}
+run_number <- 1:1000
+seed_list <- c(12345:13344)
+svm_rec_random_aucpr <- data.frame(run = run_number, AUCPR = NA)
+
+```
+
+
+```{r}
+for (j in 1:length(run_number)) {
+  
+set.seed(seed_list[j])
+
+train$Reason.for.discontinuation <-
+  (sample(train$Reason.for.discontinuation))
+
+test$Reason.for.discontinuation <-
+  (sample(test$Reason.for.discontinuation))
+
+
+train.model <- svm(`Reason.for.discontinuation` ~ ., 
+                   data = train, 
+                   probability = TRUE,
+                   type = "C", 
+                   # class.weights=c("Progression"=1.833,
+                   #                 "Therapy complete"=0.6875)
+                   )
+
+test.model <- predict(train.model, 
+                      test, 
+                      probability = TRUE, 
+                      type = "C", 
+                      # class.weights=c("Progression"=1.95,
+                      #                 "Therapy complete"=0.6724138)
+                      )
+
+test.model.df <- data.frame(test.model)
+
+confusionMatrix(test$Reason.for.discontinuation, 
+                test.model.df$test.model, 
+                positive = "Progression")
+
+test.store <- data.frame(attr(test.model, "probabilities"))
+
+#Creating df for calculating aucpr
+test.store <- data.frame(attr(test.model, "probabilities"))
+
+scores <- data.frame(test.store$Progression, test$Reason.for.discontinuation)
+
+scores <- scores %>%
+  mutate(score = case_when((test.Reason.for.discontinuation == "Therapy complete") ~ 0,
+         TRUE ~ 1))
+
+
+#Calculating aucpr
+aucpr <- pr.curve(scores.class0=scores[scores$score=="1",]$test.store.Progression,
+             scores.class1=scores[scores$score=="0",]$test.store.Progression,
+             curve=T)
+
+aucpr$auc.integral
+svm_rec_random_aucpr[j, 2] <- aucpr$auc.integral
+}
+
+write_csv(svm_rec_random_aucpr, file = "svm_rec_random_1000")
+```
+
+
+

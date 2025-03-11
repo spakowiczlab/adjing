@@ -97,3 +97,55 @@ xgb.plot.importance(importance_matrix = importance_matrix)
 ```
 
 
+```{r}
+run_number <- 1:1000
+seed_list <- c(12345:13344)
+
+xgb_rec_aucpr <- data.frame(run = run_number, Average = NA)
+```
+
+
+```{r}
+
+for (i in 1:length(run_number)) {
+  
+set.seed(seed_list[i])
+  
+train.label$Reason.for.discontinuation<- 
+  (sample(train.label$Reason.for.discontinuation))
+  
+
+test.label$Reason.for.discontinuation<- 
+  (sample(test.label$Reason.for.discontinuation))
+
+
+xgb.train = xgb.DMatrix(data = as.matrix(train.data),
+                        label = as.matrix(train.label))
+
+xgb.test = xgb.DMatrix(data = as.matrix(test.data),
+                       label = as.matrix(test.label))
+
+watchlist = list(train=xgb.train, test=xgb.test)
+
+  
+  
+xgbtest = xgb.train(data = xgb.train, 
+                    max.depth = 3, 
+                    eta = 0.01,
+                    watchlist = watchlist,
+                    verbose = 0,
+                    nrounds = 1000,
+                    objective = "binary:logistic",
+                    eval_metric = 'aucpr',
+                    scale_pos_weight = 1,
+                    early_stopping_rounds = 100)
+
+xgb_rec_aucpr[i, 2] <- xgbtest$best_score
+
+}
+
+write_csv(xgb_rec_aucpr, file = "xgb_rec_random_1000")
+
+
+```
+

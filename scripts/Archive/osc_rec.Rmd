@@ -1,0 +1,140 @@
+---
+title: "aucpr_and_cfm_template"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+```
+
+Loading file
+```{r}
+# rm(list=ls())
+
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rec_functions.R")
+```
+
+Splitting the cohorts into the 
+```{r}
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete", 
+                          "Progression")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(pt.status, 
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Progression") 
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+```
+
+```{r}
+train.outcomes <-
+  train.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+test.outcomes <-
+  test.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+rf_rec <- kTest(seed_list) 
+
+aucprs <- grabVals(aucprs, rf_rec)
+
+aucprs_avg <- mean(aucprs$AUCPR)
+aucprs_avg
+
+
+p_values <- fishing(p_values, rf_rec)
+
+p_values_avg <- mean(p_values$p.value)
+p_values_avg
+
+
+saveRDS(rf_rec, file = "../Outputs/rf_rec.RData")
+
+
+
+```
+
+
+Creating objects for runs, including making a new longer seed list for use in shuffling
+```{r}
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+rf_rec_random_1000 <- data.frame(run = run_number, Average = NA)
+```
+
+
+
+```{r}
+for (j in 1:length(run_number)) {
+  set.seed(seed_list_r[j])
+train.outcomes$Reason.for.discontinuation<- 
+  (sample(train.outcomes$Reason.for.discontinuation))
+
+test.outcomes$Reason.for.discontinuation<- 
+  (sample(test.outcomes$Reason.for.discontinuation))
+
+rf_random_rec <- kTest(seed_list) 
+rf_rec_random_1000[j, 2] <- rf_random_rec
+
+}
+
+aucprs_random <- grabVals(aucprs_random, rf_rec_random_1000)
+
+aucprs_random_avg <- mean(aucprs_random$AUCPR)
+aucprs_random_avg
+
+
+p_values_random <- fishing(p_values_random, rf_rec_random_1000)
+
+p_values_random_avg <- mean(p_values_random$p.value)
+p_values_random_avg
+
+
+
+saveRDS(rf_rec_random_1000, file = "../Outputs/rf_rec_random_1000.RData")
+```

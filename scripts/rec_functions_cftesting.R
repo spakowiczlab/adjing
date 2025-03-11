@@ -1,11 +1,4 @@
 
-sorting <- function(data, cohort, outcome1, outcome2){
-  filter(data, 
-         Cohort == cohort, 
-         Reason.for.discontinuation == outcome1 | 
-           Reason.for.discontinuation == outcome2)  
-}
-
 
 k_validate <- function(seed){
   set.seed(seed)
@@ -15,9 +8,10 @@ k_validate <- function(seed){
   
   out[[1]] <- getROC(train.seq, train.outcomes, test.seq, test.outcomes)
 
-  
   avg_AUCPR <- lapply(out, function(x){ x[[1]]})
   message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_AUCPR))))
+  # print(out[1])
+  
   return(out)
 }
 
@@ -35,21 +29,24 @@ getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes){
   
   test.preds <- predict(model.training, test.seq[,-1, drop=FALSE])
   
+  # print(model.training)
+  # Check variable importance
+  #varImpPlot(model.training)
   # Prediction confusion matrix
   pred_cm <- table(observed = test.outcomes$Reason.for.discontinuation,
-                   predicted = test.preds)
+        predicted = test.preds)
   
   print(pred_cm)
   
-  
+
   prediction_for_roc_curve <- predict(model.training, 
                                       test.seq[,-1, drop=FALSE],
                                       type="prob")
   
   pred <- prediction(prediction_for_roc_curve[,2], 
-                     test.outcomes$Reason.for.discontinuation, 
-                     label.ordering = 
-                       c("Therapy complete", "Progression"))
+    test.outcomes$Reason.for.discontinuation, 
+    label.ordering = 
+    c("Therapy complete", "Progression"))
   #for making aucpr curves
   # scores <- data.frame(prediction_for_roc_curve[,2], test.outcomes$Reason.for.discontinuation)
   # 
@@ -73,14 +70,17 @@ getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes){
   
   df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
                    TruePositive=c(perf@y.values[[1]]))
+  # out <- list(AUCPR, df)
   out <- list(AUCPR, df, pred_cm)
   
   return(out)
+  # return(empty)
+  
 }
 
 
-# Grabbing AUCPR values from input models #
-grabVals <- function(output, input, seed_list){
+# Grabbing AUROC values from input models #
+grabVals <- function(output, input){
   output <- list()
   
   for(i in 1:length(seed_list)){
@@ -93,13 +93,16 @@ grabVals <- function(output, input, seed_list){
 }
 
 
-
 # Main function call to generate RF models using 25 seeds #
 kTest <- function(seed_list){
   out <- list()
   for(i in 1:length(seed_list)){
     out[[i]] <- k_validate(seed = seed_list[i])
   }
+  # out <- grabVals(out)
+  # CW edit to function
+  # out <- do.call(rbind.data.frame, out)
+  # colnames(out) <- c("AUCPR")
   out
 }
 
@@ -113,13 +116,5 @@ fishing <- function(output, data){
   output <- do.call(rbind.data.frame, output)
   colnames(output) <- c("p.value")
   output
-  
-}
-
-
-p.calc <- function(data, random){
-  avg <- mean(data$AUCPR)
-  p <- ecdf(random$Average)
-  p(avg)
   
 }

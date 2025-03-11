@@ -1,0 +1,130 @@
+---
+title: "percentile_calc"
+author: "Noah Lepola"
+date: "2025-02-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rf_rec_aucprs <- read.csv(file = "../Outputs/OSC outputs/rf_rec_aucprs.csv")
+
+
+rf_rec_random_1000 <- read.csv(file = "../Outputs/OSC outputs/rf_rec_random_1000.csv")
+
+
+rf_tox_aucprs <- read.csv(file = "../Outputs/OSC outputs/rf_tox_aucprs.csv")
+
+
+rf_tox_random_1000 <- read.csv(file = "../Outputs/OSC outputs/rf_tox_random_1000.csv")
+
+
+rf_rec_top_aucprs <- read.csv(file = "../Outputs/OSC outputs/rf_rec_top_aucprs.csv")
+
+
+rf_rec_top_random_1000 <- read.csv(file = "../Outputs/OSC outputs/rf_rec_top_random_1000.csv")
+
+
+rf_tox_top_aucprs <- read.csv(file = "../Outputs/OSC outputs/rf_tox_top_aucprs.csv")
+
+
+rf_tox_top_random_1000 <- read.csv(file = "../Outputs/OSC outputs/rf_tox_top_random_1000.csv")
+
+
+rf_rec_top_chr_aucprs <- read.csv(file = "../Outputs/OSC outputs/rf_rec_top_chr_aucprs.csv")
+
+
+rf_rec_top_char_random_1000 <- read.csv(file = "../Outputs/OSC outputs/rf_rec_top_char_random_1000.csv")
+
+
+rf_tox_top_chr_aucprs <- read.csv(file = "../Outputs/OSC outputs/rf_tox_top_chr_aucprs.csv")
+
+
+rf_tox_top_char_random_1000 <- read.csv(file = "../Outputs/OSC outputs/rf_tox_top_char_random_1000.csv")
+
+
+rf_rec_top_aucprs_xgboost_based <- read.csv(file = "../Outputs/OSC outputs/rf_rec_top_aucprs_xgboost_based.csv")
+
+
+rf_rec_top_random_1000_xgboost_based <- read.csv(file = "../Outputs/OSC outputs/rf_rec_top_random_1000_xgboost_based.csv")
+
+
+rf_tox_top_aucprs_xgboost_based <- read.csv(file = "../Outputs/OSC outputs/rf_tox_top_aucprs_xgboost_based.csv")
+
+
+rf_tox_top_random_1000_xgboost_based <- read.csv(file = "../Outputs/OSC outputs/rf_tox_top_random_1000_xgboost_based.csv")
+
+
+rf_rec_top_aucprs_altlogr_based <- read.csv(file = "../Outputs/OSC outputs/rf_rec_top_aucprs_altlogr_based.csv")
+
+
+rf_rec_top_random_1000_altlogr_based <- read.csv(file = "../Outputs/OSC outputs/rf_rec_top_random_1000_altlogr_based.csv")
+
+
+rf_tox_top_aucprs_altlogr_based <- read.csv(file = "../Outputs/OSC outputs/rf_tox_top_aucprs_altlogr_based.csv")
+
+
+rf_tox_top_random_1000_altlogr_based <- read.csv(file = "../Outputs/OSC outputs/rf_tox_top_random_1000_altlogr_based.csv")
+
+```
+
+
+```{r}
+ p.calc <- function(data, random){
+   avg <- mean(data$AUCPR)
+   p <- ecdf(random$Average)
+   p(avg)
+
+ }
+ 
+rec <- p.calc(rf_rec_aucprs,
+              rf_rec_random_1000)
+
+
+rec_top <- p.calc(rf_rec_top_aucprs,
+                  rf_rec_top_random_1000)
+
+
+rec_top_xgb <- p.calc(rf_rec_top_aucprs_xgboost_based,
+                      rf_rec_top_random_1000_xgboost_based)
+
+
+rec_top_alt <- p.calc(rf_rec_top_aucprs_altlogr_based,
+                      rf_rec_top_random_1000_altlogr_based)
+
+
+rec_top_char <- p.calc(rf_rec_top_chr_aucprs, rf_rec_top_char_random_1000)
+
+
+tox <- p.calc(rf_tox_aucprs,
+              rf_tox_random_1000)
+
+
+tox_top <- p.calc(rf_tox_top_aucprs,
+                  rf_tox_top_random_1000)
+
+
+tox_top_xgb <- p.calc(rf_tox_top_aucprs_xgboost_based,
+                      rf_tox_top_random_1000_xgboost_based)
+
+
+tox_top_alt <- p.calc(rf_tox_top_aucprs_altlogr_based,
+                      rf_tox_top_random_1000_altlogr_based)
+
+
+tox_top_char <- p.calc(rf_tox_top_chr_aucprs,
+                       rf_tox_top_char_random_1000)
+
+
+
+
+```
+
+
+
+
+
+

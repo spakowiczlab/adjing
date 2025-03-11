@@ -13,7 +13,6 @@ library(tidyverse)
 library(openxlsx)
 library(broom)
 
-knitr::opts_knit$set(root.dir = "T:/Labs/Burd/CEBurd Lab/Noah Lepola/Coding/my adjing work folder/Scripts for paper/Saved files for paper")
 
 
 ```
@@ -89,7 +88,6 @@ tox_split_chr_adj <- tox_split_chr_adj %>%
    arrange(FDR) 
 
 save(tox_split_chr_adj, file = "../Outputs/tox_split_chr_adj")
-
 
 
 

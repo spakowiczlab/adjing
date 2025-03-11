@@ -1,0 +1,116 @@
+---
+title: "adjing_cohort_split_rec_top_chr"
+author: "Noah Lepola"
+date: "2024-11-025"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+```
+
+
+Loading file
+```{r}
+load(file = "age_dev")
+load(file = "pt.char")
+load(file = "pt.status")
+```
+
+
+Splitting by cohort and outcome
+```{r}
+train.outcomes <- filter(pt.status, Cohort == "Adj", 
+Reason.for.discontinuation == "Therapy complete" |
+  Reason.for.discontinuation == "Progression")
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+test.outcomes <- filter(pt.status, Cohort == "Adj Validation",
+Reason.for.discontinuation == "Therapy complete" |
+  Reason.for.discontinuation == "Progression")
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(age_dev, (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(age_dev, (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+```
+
+
+Limiting information to just what is needed for this model and splitting outcome from expression
+```{r}
+train.seq <- train.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1,
+ `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, GZMB, CD244, CD274, ZBTB7B, CXCR3)
+
+
+test.seq <- test.seq %>% select(Sample, CD3D, AHR, HAVCR2, PVRIG, VTCN1, 
+ `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, GZMB, CD244, CD274, ZBTB7B, CXCR3)
+
+top.c <- pt.char %>% select(Sample, `BMI (kg/m2)`, `LDH (U/L)`, Therapy, 
+                            `Platelets (K/uL)`, Age)
+train.seq <- left_join(train.seq, top.c)
+test.seq <- left_join(test.seq, top.c)
+
+train.outcomes <- train.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+test.outcomes <- test.outcomes %>% select(Sample, `Reason.for.discontinuation`)
+```
+top 15 genes by log regression using only Adj (exploratory) cohort CD3D, AHR, HAVCR2, PVRIG, VTCN1, `KIR_Inhibiting_Subgroup_1`, CTLA4, CD28, GZMB, CD244, CD274, ZBTB7B, CXCR3, CD160, CD276
+top characteristics using only Adj (exploratory) cohort `BMI (kg/m2)`, `LDH (U/L)`, Therapy, `Platelets (K/uL)`, Age, Stage
+
+
+
+```{r}
+source("rec_functions.R")
+```
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+#Currently working on this
+rf_ad_rec_top_char_aucprs <- kTest(seed_list) 
+rf_ad_rec_top_char_aucprs_avg <- mean(rf_ad_rec_top_char_aucprs$AUCPR)
+write.csv(rf_ad_rec_top_char_aucprs, file = "rf_ad_rec_top_char_aucprs.csv")
+rf_ad_rec_top_char_aucprs_avg
+
+```
+
+
+
+```{r}
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+rf_ad_rec_top_char_random_1000 <- data.frame(run = run_number, Average = NA)
+```
+
+```{r}
+for (j in 1:length(run_number)) {
+  set.seed(seed_list_r[j])
+train.outcomes$Reason.for.discontinuation<- 
+  (sample(train.outcomes$Reason.for.discontinuation))
+
+test.outcomes$Reason.for.discontinuation<- 
+  (sample(test.outcomes$Reason.for.discontinuation))
+
+r_random_rec_aucprs <- kTest(seed_list) 
+avg <- mean(r_random_rec_aucprs$AUCPR)
+rf_ad_rec_top_char_random_1000[j, 2] <- avg
+
+  }
+mean(rf_ad_rec_top_char_random_1000$Average)
+
+write.csv(rf_ad_rec_top_char_random_1000, file = "rf_ad_rec_top_char_random_1000.csv")
+```
+
+
+
