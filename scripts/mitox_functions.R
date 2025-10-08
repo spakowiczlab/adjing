@@ -13,13 +13,13 @@ met_sorting <- function(data, outcome1, outcome2){
 }
 
 
-k_validate <- function(seed, neg.outcome, pos.outcome){
+k_validate <- function(seed, neg.outcome, pos.outcome, outcome, tree){
   set.seed(seed)
   
   
   out <- list()
   
-  out[[1]] <- getROC(train.seq, train.outcomes, test.seq, test.outcomes, neg.outcome, pos.outcome)
+  out[[1]] <- getROC(train.seq, train.outcomes, test.seq, test.outcomes, neg.outcome, pos.outcome, outcome, tree)
   
   
   avg_AUCPR <- lapply(out, function(x){ x[[1]]})
@@ -29,22 +29,21 @@ k_validate <- function(seed, neg.outcome, pos.outcome){
 
 
 # Function create and test RF model #
-getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outcome, pos.outcome){
-  if(all(train.seq$Sample == train.outcomes$Sample) == FALSE){
+getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outcome, pos.outcome, outcome, tree){
+  if(all(train.outcomes$`Patient Id` == train.outcomes$`Patient Id`) == FALSE){
     stop("Training Sample_IDs do not match")
   }
-  if(all(test.seq$Sample == test.outcomes$Sample) == FALSE){
+  if(all(test.outcomes$`Patient Id` == test.outcomes$`Patient Id`) == FALSE){
     stop("Testing Sample_IDs do not match")
   }
   model.training <- randomForest(x = train.seq[,-1, drop=FALSE], y = 
-                          as.factor(train.outcomes$Reason.for.discontinuation), importance=TRUE)
+                          as.factor(train.outcomes[[outcome]]), ntree = tree, importance = TRUE) #, mtry = 9
   
   test.preds <- predict(model.training, 
                         test.seq[,-1, drop=FALSE])
-
   
   # Prediction confusion matrix
-  pred_cm <- table(observed = test.outcomes$Reason.for.discontinuation,
+  pred_cm <- table(observed = test.outcomes[[outcome]],
                    predicted = test.preds)
   
   print(pred_cm)
@@ -55,11 +54,11 @@ getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outco
                                       type="prob")
   
   pred <- prediction(prediction_for_roc_curve[,2], 
-                     test.outcomes$Reason.for.discontinuation, 
+                     test.outcomes[[outcome]], 
                      label.ordering = 
                        c(neg.outcome, pos.outcome))
   #for making aucpr curves
-  # scores <- data.frame(prediction_for_roc_curve[,2], test.outcomes$Reason.for.discontinuation)
+  # scores <- data.frame(prediction_for_roc_curve[,2], test.outcomes[[outcome]])
   # 
   # scores <- scores %>%
   #   mutate(score = case_when((test.outcomes.Reason.for.discontinuation == "Therapy complete") ~ 1,
@@ -81,8 +80,9 @@ getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outco
   
   df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
                    TruePositive=c(perf@y.values[[1]]))
-  out <- list(AUCPR, df, pred_cm)
-  
+  varimp <- model.training$importance
+  out <- list(AUCPR, df, pred_cm, varimp)
+
   return(out)
 }
 
@@ -100,12 +100,24 @@ grabVals <- function(output, input, seed_list){
   output
 }
 
+grabImp <- function(output, input, seed_list){
+  datalist <- list()
+  
+  for(i in 1:length(seed_list)){
+    tempdata <- data.frame(as.list(input[[i]][[1]][[4]][,4]))
+    datalist[[i]] <- tempdata
+  }
+  output <- do.call(rbind, datalist)
+  
+  output
+}
+
 
 # Main function call to generate RF models using 25 seeds #
-kTest <- function(seed_list, neg.outcome, pos.outcome){
+kTest <- function(seed_list, neg.outcome, pos.outcome, outcome, tree){
   out <- list()
   for(i in 1:length(seed_list)){
-    out[[i]] <- k_validate(seed = seed_list[i], neg.outcome, pos.outcome)
+    out[[i]] <- k_validate(seed = seed_list[i], neg.outcome, pos.outcome, outcome, tree)
   }
   # out <- grabVals(out)
   # CW edit to function

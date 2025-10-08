@@ -73,7 +73,7 @@ gene.exp <- g.and.c.data %>%
 save(gene.exp, file = "../Outputs/gene.exp")
 
 pt.char <- g.and.c.data %>%
-  select(Sample, Age, `BMI (kg/m2)`, `Platelets (K/uL)`, `LDH (U/L)`, Stage, Therapy)
+  select(Sample, Age, `BMI (kg/m2)`, `Platelets (K/uL)`, `LDH (U/L)`, Stage, Therapy, Sex)
 
 
 save(pt.char, file = "../Outputs/pt.char")

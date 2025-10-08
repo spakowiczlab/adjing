@@ -47,8 +47,10 @@ vars <- c("Reason.for.discontinuation", "Age", "BMI (kg/m2)", "Platelets (K/uL)"
 Making Table One separated by cohort
 ```{r}
 cohort.strat <- CreateTableOne(vars = vars, strata = "Cohort",
-                               data = pt.char.status, test = TRUE,)
+                               data = pt.char.status, test = TRUE)
 cohort.strat
+
+knitr::kable(print(cohort.strat))
 ```
 
 Creating objects for second and third table

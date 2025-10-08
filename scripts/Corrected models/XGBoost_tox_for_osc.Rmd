@@ -20,25 +20,35 @@ load(file = "../Outputs/xgb.char")
 load(file = "../Outputs/pt.status")
 ```
 
+```{r}
+source("../xgb_functions.R")
+```
+
+
+
 
 Splitting by cohort and outcome
 ```{r}
+
+outcome.creation <- function(cohort, pos.outcome){
+   filter(pt.status, 
+   Cohort == cohort, 
+   Reason.for.discontinuation == "Therapy complete" | 
+   Reason.for.discontinuation == pos.outcome)   
+ }
+
 adj.char <- left_join(gene.exp, xgb.char,
                       by = join_by("Sample" == "Sample" ))
 
-adj.outcomes <- filter(pt.status, 
-                       Cohort == "Adj", 
-                       Reason.for.discontinuation == "Therapy complete" | 
-                         Reason.for.discontinuation == "Toxicity")
+adj.outcomes <- outcome.creation("Adj", "Toxicity")
 
-val.outcomes <- filter(pt.status, 
-                       Cohort == "Adj Validation", 
-                       Reason.for.discontinuation == "Therapy complete" |
-                         Reason.for.discontinuation == "Toxicity")
+val.outcomes <- outcome.creation("Adj Validation", "Toxicity")
+
 
 g.and.c.data.adj <- filter(adj.char, (Sample %in% adj.outcomes$Sample))
 
 g.and.c.data.val <- filter(adj.char, (Sample %in% val.outcomes$Sample))
+
 
 val.data.outcomes <- left_join(val.outcomes,
                                g.and.c.data.val,
@@ -48,12 +58,14 @@ adj.data.outcomes <- left_join(adj.outcomes,
                                g.and.c.data.adj,
                                by = join_by("Sample" == "Sample" ))
 
-```
-
-
-```{r}
 train.data <- adj.data.outcomes %>%
-  select(-Sample, -Reason.for.discontinuation, -Cohort)
+    select(
+         ADORA2A:YWHAZ
+          # TNFRSF18,
+          # VTCN1
+         # TNF, TGFB1
+          )
+  # select(-Sample, -Reason.for.discontinuation, -Cohort)
 
 train.label <- adj.data.outcomes %>%
   select(Reason.for.discontinuation) %>% 
@@ -63,7 +75,12 @@ train.label <- adj.data.outcomes %>%
 
 
 test.data <- val.data.outcomes %>%
-  select(-Sample, -Reason.for.discontinuation, -Cohort)
+    select(
+               ADORA2A:YWHAZ
+          # TNFRSF18,
+          # VTCN1
+          )
+  # select(-Sample, -Reason.for.discontinuation, -Cohort)
 
 test.label <- val.data.outcomes %>%
   select(Reason.for.discontinuation) %>% 
@@ -76,23 +93,40 @@ xgb.train = xgb.DMatrix(data = as.matrix(train.data),
 xgb.test = xgb.DMatrix(data = as.matrix(test.data), 
                        label = as.matrix(test.label))
 
+```
+
+
+```{r}
+
+xgb_tox <- data.frame(run = 1, F1 = NA)
 
 watchlist = list(train=xgb.train, test=xgb.test)
 
-xgbtest = xgb.train(data = xgb.train, 
-                    max.depth = 3, 
-                    eta = 0.01,
+bst <- xgb.train(data = xgb.train,
+                    max.depth = 3,
+                    eta = 0.1,
+                    nrounds = 100,
                     watchlist = watchlist,
-                    nrounds = 1000,
+                    verbose = 0,
                     objective = "binary:logistic",
                     eval_metric = 'aucpr',
                     scale_pos_weight = 1,
-                    early_stopping_rounds = 100)
+                    early_stopping_rounds = 25)
 
 
-importance_matrix <- xgb.importance(model = xgbtest)
+pred <- predict(bst, xgb.test)
+
+pred <-  as.numeric(pred > 0.5)
+
+test.label.vector <- as.vector(test.label$Reason.for.discontinuation)
+
+bop100 <- confusionMatrix(factor(pred), factor(test.label.vector), positive = "1")
+xgb_tox <- bop100[[4]][7]
+print(bop100[[4]][7])
+importance_matrix <- xgb.importance(model = bst)
 print(importance_matrix)
 xgb.plot.importance(importance_matrix = importance_matrix)
+
 
 ```
 
@@ -100,7 +134,7 @@ xgb.plot.importance(importance_matrix = importance_matrix)
 run_number <- 1:1000
 seed_list <- c(12345:13344)
 
-xgb_tox_aucpr <- data.frame(run = run_number, Average = NA)
+xgb_tox_random <- data.frame(run = run_number, F1 = NA)
 ```
 
 ```{r}
@@ -108,7 +142,7 @@ xgb_tox_aucpr <- data.frame(run = run_number, Average = NA)
 for (i in 1:length(run_number)) {
   
 set.seed(seed_list[i])
-  
+
 train.label$Reason.for.discontinuation<- 
   (sample(train.label$Reason.for.discontinuation))
   
@@ -126,21 +160,43 @@ xgb.test = xgb.DMatrix(data = as.matrix(test.data),
 watchlist = list(train=xgb.train, test=xgb.test)
 
   
-  
-xgbtest = xgb.train(data = xgb.train, 
-                    max.depth = 3, 
-                    eta = 0.01,
+randommodel <- xgb.train(data = xgb.train,
+                    max.depth = 3,
+                    eta = 0.1,
+                    nrounds = 100,
                     watchlist = watchlist,
                     verbose = 0,
-                    nrounds = 1000,
                     objective = "binary:logistic",
                     eval_metric = 'aucpr',
                     scale_pos_weight = 1,
-                    early_stopping_rounds = 100)
+                    early_stopping_rounds = 25)
 
-xgb_tox_aucpr[i, 2] <- xgbtest$best_score
+randompred <- predict(randommodel, xgb.test)
 
+randompred <-  as.numeric(randompred > 0.5)
+
+test.label.vector <- as.vector(test.label$Reason.for.discontinuation)
+
+suppressWarnings(
+randomcm <- confusionMatrix(factor(randompred), factor(test.label.vector), positive = "1")
+)
+xgb_tox_random$F1[i] <- randomcm[[4]][7]
+# print(randomcm[[4]][7])
+# print(i)
 }
-write_csv(xgb_tox_aucpr, file = "xgb_tox_random_1000")
+# write_csv(xgb_tox_aucpr, file = "xgb_tox_random_1000")
+```
+
+
+```{r}
+xgb_tox_random$F1[is.na(xgb_tox_random$F1)] <- 0
+
+p.calc(xgb_tox, xgb_tox_random$F1)
+```
+
+
+```{r}
+cat(xgb_tox_random$F1, sep = "\n")
+
 ```
 

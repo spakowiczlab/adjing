@@ -1,18 +1,81 @@
+---
+title: "rec_importance"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
 
-sorting <- function(data, cohort, outcome1, outcome2){
-  filter(data, 
-         Cohort == cohort, 
-         Reason.for.discontinuation == outcome1 | 
-           Reason.for.discontinuation == outcome2)  
-}
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 
-met_sorting <- function(data, outcome1, outcome2){
-  filter(data, 
-         Reason.for.discontinuation == outcome1 | 
-           Reason.for.discontinuation == outcome2)  
-}
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+```
+
+Loading file
+```{r}
+
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+Splitting the cohorts into the 
+```{r}
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete", 
+                          "Progression")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
 
 
+test.outcomes <- sorting(pt.status, 
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Progression") 
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+```
+
+```{r}
+train.outcomes <-
+  train.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+test.outcomes <-
+  test.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
 k_validate <- function(seed, neg.outcome, pos.outcome){
   set.seed(seed)
   
@@ -26,8 +89,10 @@ k_validate <- function(seed, neg.outcome, pos.outcome){
   message("\nAccuracy average: ", (rowMeans(as.data.frame(avg_AUCPR))))
   return(out)
 }
+```
 
 
+```{r}
 # Function create and test RF model #
 getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outcome, pos.outcome){
   if(all(train.seq$Sample == train.outcomes$Sample) == FALSE){
@@ -41,7 +106,9 @@ getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outco
   
   test.preds <- predict(model.training, 
                         test.seq[,-1, drop=FALSE])
-
+  
+  # Check variable importance
+  varImpPlot(model.training)
   
   # Prediction confusion matrix
   pred_cm <- table(observed = test.outcomes$Reason.for.discontinuation,
@@ -81,26 +148,32 @@ getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outco
   
   df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
                    TruePositive=c(perf@y.values[[1]]))
-  out <- list(AUCPR, df, pred_cm)
+  
+  varimp <- model.training$importance
+  out <- list(AUCPR, df, pred_cm, varimp)
   
   return(out)
 }
+```
 
 
+```{r}
 # Grabbing AUROC values from input models #
 grabVals <- function(output, input, seed_list){
-  output <- list()
+  datalist <- list()
   
   for(i in 1:length(seed_list)){
-    output <- append(output, input[[i]][[1]][[1]])
+    tempdata <- data.frame(as.list(input[[i]][[1]][[4]][,4]))
+    datalist[[i]] <- tempdata
   }
-  
-  output <- do.call(rbind.data.frame, output)
-  colnames(output) <- c("AUCPR")
+  output <- do.call(rbind, datalist)
+
   output
 }
+```
 
 
+```{r}
 # Main function call to generate RF models using 25 seeds #
 kTest <- function(seed_list, neg.outcome, pos.outcome){
   out <- list()
@@ -113,72 +186,27 @@ kTest <- function(seed_list, neg.outcome, pos.outcome){
   # colnames(out) <- c("AUCPR")
   out
 }
+```
 
 
-fishing <- function(output, data, seed_list){
-  output <- list()
-  for (i in 1:length(seed_list)) {
-    output[[i]] <- fisher.test(data[[i]][[1]][[3]])
-    output[[i]] <- output[[i]][[1]][[1]]
-  }
-  output <- do.call(rbind.data.frame, output)
-  colnames(output) <- c("p.value")
-  output
+```{r}
+rf_rec <- kTest(seed_list, "Therapy complete", "Progression") 
+
+varimp <- train.seq[0,2:80]
+
+varimp <- grabVals(varimp, rf_rec, seed_list)
+
+rec.imp.w <- data.frame(as.list(apply(varimp, 2, median)))
+
+rec.imp.l <- rec.imp.w %>% 
+  pivot_longer(cols = 1:length(rec.imp.w), names_to = "Gene", values_to = "GINI") 
   
-}
+rec.imp.l  <- arrange(rec.imp.l, desc(GINI))
 
-
-p.calc <- function(data, random){
-  avg <- (data)
-  p <- ecdf(random)
-  p(avg)
-  
-}
+# saveRDS(rf_rec, file = "../Outputs/rf_rec.RData")
 
 
 
-
-add.metrics <- function(dataobject, output, pos.outcome){
-  test_conmat2 <- data.frame(run = 1:25000,
-                             Accuracy = NA,
-                             Specificity = NA,
-                             Precision = NA,
-                             Recall = NA,
-                             F1 = NA)
-  
-  for (i in 1:25000) {
-    test_conmat <- confusionMatrix(dataobject[[i]][[1]][[3]],
-                                   positive = pos.outcome)
-    
-    test_conmat2$Accuracy[i] <- test_conmat[[3]][1]
-    test_conmat2$Specificity[i] <- test_conmat[[4]][2]
-    test_conmat2$Precision[i] <- test_conmat[[4]][5]
-    test_conmat2$Recall[i] <- test_conmat[[4]][6]
-    test_conmat2$F1[i] <- test_conmat[[4]][7]
-    
-    
-  }
-  test_conmat2[is.na(test_conmat2)] <- 0
-  x = 1
-  output <- data.frame(run = 1:1000,
-                       Avg.Accuracy = NA,
-                       Avg.Specificity = NA,
-                       Avg.Precision = NA,
-                       Avg.Recall = NA,
-                       Avg.F1 = NA)
-  
-  for (i in 1:1000) {
-    y = x+24
-    
-    output$Avg.Accuracy[i] <- mean(test_conmat2$Accuracy[x:y])
-    output$Avg.Specificity[i] <- mean(test_conmat2$Specificity[x:y])
-    output$Avg.Precision[i] <- mean(test_conmat2$Precision[x:y])
-    output$Avg.Recall[i] <- mean(test_conmat2$Recall[x:y])
-    output$Avg.F1[i] <- mean(test_conmat2$F1[x:y])
-    
-    x = x+25
-  }
-  output
-}
+```
 
 

@@ -1,0 +1,69 @@
+---
+title: "met_pt_loading"
+author: "Noah Lepola"
+date: "2025-04-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+metdisdata <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 4) %>%
+  drop_na(Sample, ADORA2A) 
+
+metvaldata <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 5) %>%
+  drop_na(Sample, ADORA2A) 
+
+
+
+met_dis_data <- metdisdata %>%
+  select(Sample, `Reason for Discontinuation 0=Complete, 1=Progression, 2=Toxicity, 3=Choice/Comorb, 4=Ongoing`, ADORA2A:YWHAZ)
+
+met_val_data <- metvaldata %>%
+  select(Sample, `Reason for Discontinuation 0=Complete, 1=Progression, 2=Toxicity, 3=Choice/Comorb, 4=Ongoing`, ADORA2A:YWHAZ)
+
+
+metdata <- full_join(met_dis_data, met_val_data)
+
+met_data <- metdata %>%
+  select(Sample, ADORA2A:YWHAZ)
+
+saveRDS(met_data, file = "../Outputs/met_data.RData")
+
+met_outcomes <- metdata %>%
+  select(Sample, `Reason for Discontinuation 0=Complete, 1=Progression, 2=Toxicity, 3=Choice/Comorb, 4=Ongoing`)
+
+colnames(met_outcomes)[2] <- "Reason.for.discontinuation"
+met_outcomes$Reason.for.discontinuation[
+met_outcomes$Reason.for.discontinuation == 0] <- "Therapy complete"
+
+met_outcomes$Reason.for.discontinuation[
+met_outcomes$Reason.for.discontinuation == 1] <- "Progression"
+
+met_outcomes$Reason.for.discontinuation[
+met_outcomes$Reason.for.discontinuation == 2] <- "Toxicity"
+
+
+
+saveRDS(met_outcomes, file = "../Outputs/met_outcomes.RData")
+
+
+```
+
+
+```{r}
+
+met_outcomes_past <- readxl::read_xlsx("T:/Labs/Burd/CEBurd Lab/Noah Lepola/Adjuvant Melanoma Paper/Metastatic processing.xlsx", sheet = 1) %>%
+  select(Sample, `Reason.for.discontinuation`)
+
+saveRDS(met_outcomes_past, file = "../Outputs/met_outcomes_past.RData")
+
+
+```
+
+
+
+

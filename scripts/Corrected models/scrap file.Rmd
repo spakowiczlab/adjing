@@ -1,0 +1,46 @@
+---
+title: "scrap file"
+author: "Noah Lepola"
+date: "2025-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(broom)
+
+
+```
+
+Loading file
+```{r}
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.status")
+```
+
+
+```{r}
+joined <- left_join(pt.status, gene.exp)
+```
+
+
+```{r}
+tc_only <- subset(joined, Reason.for.discontinuation == "Therapy complete")
+tc_exp <- subset(tc_only, Cohort == "Adj")
+tc_val <- subset(tc_only, Cohort == "Adj Validation")
+
+tox_only <- subset(joined, Reason.for.discontinuation == "Toxicity")
+tox_exp <- subset(tox_only, Cohort == "Adj")
+tox_val <- subset(tox_only, Cohort == "Adj Validation")
+
+rec_only <- subset(joined, Reason.for.discontinuation == "Progression")
+rec_exp <- subset(rec_only, Cohort == "Adj")
+rec_val <- subset(rec_only, Cohort == "Adj Validation")
+
+cat(tox_val$IFNG, sep = "\n")
+```
+
+
