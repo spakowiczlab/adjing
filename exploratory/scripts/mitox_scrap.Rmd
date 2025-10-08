@@ -24,6 +24,22 @@ Loading file
 adjing.data <- openxlsx::loadWorkbook("T:/Labs/Spakowicz/mitox/Clinical info/Patient Data 7-1-22.xlsm")
 ```
 
+```{r}
+load("../../data/ra-long.rds")
+load("../../data/clinical.rds")
+load("../../data/blood.rds")
+load("../../data/microbiome_metadata.rds")
+load("../../data/phylum-labels.rds")
+load("../../data/struct0_response.rds")
+load("../../data/struct0_irae.rds")
+load("../../data/struct0_response.rds")
+load("../../data/struct0_irae.rds")
+load("../../data/ANCOM-BC2_response_baseline.Rdata")
+load("../../data/ANCOM-BC2_irae_baseline.RData")
+
+```
+
+
 Splitting by cohort and outcome
 ```{r}
 source("../mitox_functions.R")
@@ -31,6 +47,12 @@ source("../mitox_functions.R")
 
 Splitting the data into training and testing
 ```{r}
+
+phyl_labels <- phyl_labels %>%
+  mutate(taxon = substr(microbe, 4, nchar(microbe)))
+
+res.irae <- res.irae %>%
+  left_join(phyl_labels)
 
 #Object to limit microbiome sample to one ones taken within 10 days of treatment
 baseline <- mic.meta %>%
@@ -287,8 +309,10 @@ train.seq <- arrange(train.seq, desc(sample))
 test.seq <- filter(met4ralim,
                     (sample %in% test.outcomes$sample))
 test.seq <- arrange(test.seq, desc(sample))
+```
 
 
+```{r}
 #Response
 rf_responce <- kTest(seed_list, "Non-Responder", "Responder", "response", 2000)
 
@@ -610,6 +634,8 @@ biome_list <- colnames(limited_list) %>%
 ```{r}
 saveRDS(irAE_aucprs, file = "../Outputs/rf_mitox_irAE_aucpr.RData")
 
+
+Response_aucprs <- readRDS("../Outputs/rf_mitox_Response_aucpr.RData")
 
 saveRDS(Response_aucprs, file = "../Outputs/rf_mitox_Response_aucpr.RData")
 
