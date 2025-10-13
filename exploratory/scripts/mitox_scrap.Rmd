@@ -22,6 +22,7 @@ library(respondersig)
 Loading file
 ```{r}
 adjing.data <- openxlsx::loadWorkbook("T:/Labs/Spakowicz/mitox/Clinical info/Patient Data 7-1-22.xlsm")
+
 ```
 
 ```{r}
@@ -37,12 +38,19 @@ load("../../data/struct0_irae.rds")
 load("../../data/ANCOM-BC2_response_baseline.Rdata")
 load("../../data/ANCOM-BC2_irae_baseline.RData")
 
+
+
 ```
 
 
 Splitting by cohort and outcome
 ```{r}
 source("../mitox_functions.R")
+irAE_respondsig <- read.csv(file = "../Outputs/cleaned-metadata-expanded.csv") %>%
+  drop_na(irAE) %>%
+  filter(timepoint == "pre") %>%
+  filter(abs(days) <= 10)
+
 ```
 
 Splitting the data into training and testing
@@ -112,16 +120,19 @@ seed_list <- c(12345:12369)
 ```
 
 
-```{r}
-aucprdf <- data.frame(x = 1:25)
-```
 
 
 Making objects for structural zero and q value models
 ```{r}
+aucprdf <- data.frame(x = 1:25)
 
 phyl_labels <- phyl_labels %>%
   mutate(taxon = substr(microbe, 4, nchar(microbe)))
+
+#creating object for use in biome model
+base.micro <- ra.l %>%
+  pivot_wider(names_from = microbe, values_from = RelAbun) %>%
+  subset(sample %in% baseline$sample)
 
 #note it is dropping bacteria and archaea becaise it isn't in phyl_labels
 #making object for irAE where q < 0.05
@@ -130,6 +141,7 @@ irAE_q <- res.irae %>%
   select(microbe, q_irAEYes)  %>%
   filter(q_irAEYes < 0.005) %>%
   replace_na(list( microbe = "k__Archaea"))
+
 
 
 #structural 0 for irAE
@@ -247,6 +259,12 @@ names(train.outcomes)[names(train.outcomes) == 'Patient Id'] <- 'sample'
 #   subset(sample %in% met4ra$sample) %>%
 #   arrange(desc(sample))
 
+struct0.recist.rotate  <- struct0.recist.ft %>% 
+  pivot_wider(names_from = microbe, values_from = `structural_zero (Response = Non-Responder)`) 
+colnames(struct0.recist.rotate)[1] <- 'sample'
+
+#combining structural zero and response, 
+responsecombinedlist <- c(response_list, names(struct0.recist.rotate))
 
 
 test.outcomes <- metadata %>%
@@ -255,6 +273,7 @@ test.outcomes <- metadata %>%
   # filter(dataset == "Matson_2019") %>%
   # filter(dataset == "McCulloch_2022") %>%
   filter(dataset == "Peters_2019") %>%
+  filter(timepoint == "pre") %>%
   select(sample, response) %>%
   # subset(sample %in% test$sample) %>%
   subset(sample %in% met4ra$sample) %>%
@@ -264,16 +283,12 @@ response_list[[1]] <- "sample"
 struct0.recist.list[[1]] <- "sample"
 responsecombinedlist[[1]] <- "sample"
 
-struct0.recist.rotate  <- struct0.recist.ft %>% 
-  pivot_wider(names_from = microbe, values_from = `structural_zero (Response = Non-Responder)`) 
-colnames(struct0.recist.rotate)[1] <- 'sample'
+
   
 #removing columns not present in respondersig or in structural zero
 strct0_cols <- intersect(names(met4ra), names(struct0.recist.rotate))
 q_cols <- intersect(names(met4ra), response_list)
 
-#combining structural zero and response, 
-responsecombinedlist <- c(response_list, names(struct0.recist.rotate))
 
 combined_cols <- intersect(names(met4ra), responsecombinedlist)
 
@@ -331,7 +346,7 @@ aucprdf$micro_only_respondersigPeters_2000_qzerofivestruct0 <- aucprs$AUCPR
 
 remove(micro_only_respondersigPeters_2000_qzerofivestruct0)
 
-# Response_aucprs <- Response_aucprs[-c(53), ]
+# Response_aucprs <- Response_aucprs[-c(47), ]
 
 ```
 
@@ -357,7 +372,7 @@ response_plot <-ggplot(data = response_for_plot, mapping=aes(x = reorder(name, A
 
 # ggplot(df,aes(x,y,fill=y))+geom_bar(stat="identity")+scale_fill_gradient(low="blue",high="red")
 print(response_plot)
-ggsave("../figures/responsemodelperformance.png", height = 4, width = 7)
+# ggsave("../figures/responsemodelperformance.png", height = 4, width = 7)
 ```
 
 
