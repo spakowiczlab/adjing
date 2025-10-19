@@ -109,6 +109,27 @@ rf_met_tox_noipi_top_random_2_0_25000<- readRDS(file = "../Outputs/rf_tox_noipi_
 ```
 
 
+Loading files for no ipi runs
+```{r}
+
+rf_rec_noipi <- readRDS(file = "../Outputs/rf_rec.RData")
+rf_rec_noipi_random_25000 <- readRDS(file = "../Outputs/rf_rec_noipi_random_25000.RData")
+
+rf_rec_top_2_noipi <- readRDS(file = "../Outputs/rf_rec_top_2_noipi.RData")
+rf_rec_top_random_2_noipi_25000 <- readRDS(file = "../Outputs/rf_rec_top_random_2_noipi_25000.RData")
+
+
+
+
+rf_tox_noipi <- readRDS(file = "../Outputs/rf_tox.RData")
+rf_tox_noipi_random_25000 <- readRDS(file = "../Outputs/rf_tox_noipi_random_25000.RData")
+
+rf_tox_top_noipi_2 <- readRDS(file = "../Outputs/rf_tox_top_noipi_2.RData")
+rf_tox_top_noipi_random_2_25000 <- readRDS(file = "../Outputs/rf_tox_top_noipi_random_2_25000.RData")
+
+
+```
+
 
 Creating a function to get the average from each run of the 1000x random and then calculate the percentile of the normal run
 ```{r}
@@ -187,6 +208,17 @@ print(data_graph)
 output
 }
 ```
+
+
+```{r}
+rec_noipi_perc <- met.p.calc(rf_rec_noipi_random_25000, "Progression", rec_noipi_perc, rf_rec_noipi)
+rec_2_noipi_perc <- met.p.calc(rf_rec_top_random_2_noipi_25000, "Progression", rec_2_noipi_perc, rf_rec_top_2_noipi)
+
+tox_noipi_perc <- met.p.calc(rf_tox_noipi_random_25000, "Toxicity", tox_noipi_perc, rf_tox_noipi)
+tox_2_noipi_perc <- met.p.calc(rf_tox_top_noipi_random_2_25000, "Toxicity", tox_2_noipi_perc, rf_tox_top_noipi_2)
+
+```
+
 
 
 ```{r}

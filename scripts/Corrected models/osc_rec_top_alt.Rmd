@@ -20,7 +20,7 @@ Loading file
 
 load(file = "../Outputs/gene.exp")
 load(file = "../Outputs/pt.char")
-load(file = "../Outputs/pt.status")
+load(file = "../Outputs/pt.status_no_ipi")
 ```
 Splitting by cohort and outcome
 
@@ -72,28 +72,14 @@ test.outcomes <-
 
 train.seq <- train.seq %>% select(Sample, 
                                   #by p value
-                                  VTCN1,
                                   CD160,
-                                  NECTIN2
-                                  , `IL-21`
-                                  #by estimate
-                                  # VTCN1,
-                                  # GZMB,
-                                  # NECTIN2
-                                  # , `IL-21`
+                                  GZMB
                                   )
 
 test.seq <- test.seq %>% select(Sample, 
                                   #by p value
-                                  VTCN1,
                                   CD160,
-                                  NECTIN2
-                                  , `IL-21`
-                                  #by estimate
-                                  # VTCN1,
-                                  # GZMB,
-                                  # NECTIN2
-                                  # , `IL-21`
+                                  GZMB
  )
 
 ```
@@ -124,7 +110,7 @@ p_values_min <- min(p_values$p.value)
 p_values_min
 
 
-saveRDS(rf_rec_top, file = "../Outputs/rf_rec_top_2_2.RData")
+saveRDS(rf_rec_top, file = "../Outputs/rf_rec_top_2_noipi.RData")
 
 
 
@@ -235,8 +221,8 @@ for (j in 1:length(run_number)) {
 
 ```{r}
 
-saveRDS(rf_rec_top_random_1000, file = "../Outputs/rf_rec_top_random_2_2_1000.RData")
-saveRDS(rf_rec_top_random_25000, file = "../Outputs/rf_rec_top_random_2_2_25000.RData")
+saveRDS(rf_rec_top_random_1000, file = "../Outputs/rf_rec_top_random_2_noipi_1000.RData")
+saveRDS(rf_rec_top_random_25000, file = "../Outputs/rf_rec_top_random_2_noipi_25000.RData")
 
 ```
 

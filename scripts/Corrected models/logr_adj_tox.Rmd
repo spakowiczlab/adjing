@@ -23,8 +23,8 @@ load(file = "../Outputs/pt.status")
 ```
 Splitting by cohort and outcome
 ```{r}
-# noipi <- filter(pt.char, Therapy != "Ipilimumab")
-# pt.status <- filter(pt.status, Sample %in% noipi$Sample)
+noipi <- filter(pt.char, Therapy != "Ipilimumab")
+pt.status <- filter(pt.status, Sample %in% noipi$Sample)
 tc.tox.outcomes <- filter(pt.status, Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Toxicity")
 tc.tox.data <- filter(gene.exp, (Sample %in% tc.tox.outcomes$Sample))
 ```
@@ -47,7 +47,7 @@ fixed.tc.tox.df <- tc.tox.df %>%
   rename_with(~ fixed.genes[which((genes) == .x)], .cols = any_of(genes))
 
 #create data frame to store the output 
-logr_tox <- (data.frame(gene = genes,
+logr_tox_noipi <- (data.frame(gene = genes,
                    estimate = NA,
                    p.value = NA))
 
@@ -63,14 +63,14 @@ for (g in 1:length(fixed.genes)) {
    tmp <- glm(formula = f, data = geneoutcome, family = binomial)
    tmpdf <- broom::tidy(tmp)
 #  retrieve the line of interest with g, estimate, and p-value
-   logr_tox$estimate[g] <- tmpdf$estimate[2]
-   logr_tox$p.value[g] <- tmpdf$p.value[2]
+   logr_tox_noipi$estimate[g] <- tmpdf$estimate[2]
+   logr_tox_noipi$p.value[g] <- tmpdf$p.value[2]
  
 }
-logr_tox <- logr_tox %>%
+logr_tox_noipi <- logr_tox_noipi %>%
    mutate(FDR = p.adjust(p.value)) %>%
    arrange(FDR) 
 
-# save(logr_tox, file = "../Outputs/logr_tox")
+# save(logr_tox_noipi, file = "../Outputs/logr_tox_noipi.Rdata")
 
 ```

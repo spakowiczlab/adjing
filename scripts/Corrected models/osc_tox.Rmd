@@ -19,7 +19,7 @@ Loading file
 
 load(file = "../Outputs/gene.exp")
 load(file = "../Outputs/pt.char")
-load(file = "../Outputs/pt.status")
+load(file = "../Outputs/pt.status_no_ipi")
 ```
 Splitting by cohort and outcome
 

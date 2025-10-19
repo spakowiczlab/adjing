@@ -1,0 +1,211 @@
+---
+title: "auto aucpr opt"
+author: "Noah Lepola"
+date: "2025-03-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(dplyr)
+
+```
+
+Loading file
+```{r}
+
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status_no_ipi")
+load(file = "../Outputs/logr_tox_noipi.Rdata")
+load(file = "../Outputs/logr_pro_noipi.Rdata")
+
+
+# load(file = "../Outputs/logr_pro_noipi_no_ipi")
+# load(file = "../Outputs/logr_tox_noipi_no_ipi")
+# load(file = "../Outputs/rec_split_chr_adj_no_ipi")
+# load(file = "../Outputs/tox_split_chr_adj_no_ipi")
+# load(file = "../Outputs/logr_pro_noipi")
+# load(file = "../Outputs/logr_tox_noipi")
+# load(file = "../Outputs/pt.status")
+# load(file = "../Outputs/rec_split_chr_adj")
+# load(file = "../Outputs/tox_split_chr_adj")
+
+```
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+```{r}
+# logr_pro_noipi <- logr_pro_noipi[order(logr_pro_noipi$p.value), ]
+# logr_tox_noipi <- logr_tox_noipi[order(logr_tox_noipi$p.value), ]
+# cat(logr_tox_noipi$gene)
+```
+
+
+
+
+#note this section is for rec no ipi
+```{r}
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete",
+                          "Progression")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(pt.status,
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Progression")
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+train.seq <- train.seq %>% select(Sample,
+"CD160", "GZMB", "FOXO1", "AHR", "IL-17A", "VTCN1", "BCL6", "FOXP3", "CD8A", "PVRIG", "CD4", "ITCH", "ZBTB7B", "TIGIT", "CD3E", "TNFRSF14", "SPN", "CD27", "CDKN1B", "TGFB1", "RUNX3", "BTLA", "CD28", "GATA3", "RORA", "TBX21", "TNFRSF18", "CCR4", "C10orf54", "PRDM1", "CD276", "CD3D", "ADORA2A", "CD244", "CD127", "TNF", "SPI1", "IL2RA", "IL6", "CD274", "CD96", "PTPRC_3", "CD200R1", "PTPRC_1", "PTPRC_2", "CDKN2A (ARF)", "PVR", "CTLA4", "UBC", "YWHAZ", "LAG3", "CDKN2A (p16)", "KIR_Activating_Subgroup_1", "PDCD1", "PGK1", "IL-2", "KIR_Inhibiting_Subgroup_1", "B3GAT1", "CCR6", "GUSB", "IL-21", "RORC", "IFNG", "NECTIN2", "CXCR3", "IL-4", "HAVCR2", "PDCD1LG2", "GRAIL", "EOMES", "KLRG1", "EGR1", "HPRT1", "CD86", "KIR_Activating_Subgroup_2", "CEACAM1", "KIR_Inhibiting_Subgroup_2", "IL-10", "CD80")
+test.seq <- test.seq %>% select(Sample,
+"CD160", "GZMB" , "FOXO1", "AHR", "IL-17A", "VTCN1", "BCL6", "FOXP3", "CD8A", "PVRIG", "CD4", "ITCH", "ZBTB7B", "TIGIT", "CD3E", "TNFRSF14", "SPN", "CD27", "CDKN1B", "TGFB1", "RUNX3", "BTLA", "CD28", "GATA3", "RORA", "TBX21", "TNFRSF18", "CCR4", "C10orf54", "PRDM1", "CD276", "CD3D", "ADORA2A", "CD244", "CD127", "TNF", "SPI1", "IL2RA", "IL6", "CD274", "CD96", "PTPRC_3", "CD200R1", "PTPRC_1", "PTPRC_2", "CDKN2A (ARF)", "PVR", "CTLA4", "UBC", "YWHAZ", "LAG3", "CDKN2A (p16)", "KIR_Activating_Subgroup_1", "PDCD1", "PGK1", "IL-2", "KIR_Inhibiting_Subgroup_1", "B3GAT1", "CCR6", "GUSB", "IL-21", "RORC", "IFNG", "NECTIN2", "CXCR3", "IL-4", "HAVCR2", "PDCD1LG2", "GRAIL", "EOMES", "KLRG1", "EGR1", "HPRT1", "CD86", "KIR_Activating_Subgroup_2", "CEACAM1", "KIR_Inhibiting_Subgroup_2", "IL-10", "CD80")
+
+
+
+# top.c <- pt.char %>% select(Sample, Therapy, `BMI (kg/m2)`, `Platelets (K/uL)`,
+#                             `LDH (U/L)`, Stage, Age)
+# train.seq <- left_join(train.seq, top.c)
+# test.seq <- left_join(test.seq, top.c)
+
+
+```
+
+#note this section is for tox no ipi
+```{r}
+# train.outcomes <- sorting(pt.status,
+#                           "Adj",
+#                           "Therapy complete",
+#                           "Toxicity")
+# 
+# train.outcomes <- arrange(train.outcomes, desc(Sample))
+# 
+# 
+# test.outcomes <- sorting(pt.status,
+#                         "Adj Validation",
+#                         "Therapy complete",
+#                         "Toxicity")
+# 
+# test.outcomes <- arrange(test.outcomes, desc(Sample))
+# 
+# 
+# train.seq <- filter(gene.exp,
+#                     (Sample %in% train.outcomes$Sample))
+# train.seq <- arrange(train.seq, desc(Sample))
+# 
+# 
+# test.seq <- filter(gene.exp,
+#                    (Sample %in% test.outcomes$Sample))
+# test.seq <- arrange(test.seq, desc(Sample))
+# 
+# train.seq <- train.seq %>% select(Sample,
+# "TNFRSF18", "VTCN1", "CCR4", "AHR", "TIGIT", "NECTIN2", "IL-2", "CD28", "PDCD1", "IL-21", "IL-4", "B3GAT1", "RUNX3", "BTLA", "RORA", "CD4", "IL-10", "CD3D", "TGFB1", "CD160", "FOXO1", "CD3E", "ADORA2A", "PVRIG", "CTLA4", "TNF", "TNFRSF14", "CD127", "CD244", "SPN", "PTPRC_3", "BCL6", "CDKN2A (p16)", "CD27", "EOMES", "PDCD1LG2", "HAVCR2", "TBX21", "CEACAM1", "CD200R1", "CD8A", "IFNG", "CD80", "GRAIL", "C10orf54", "PVR", "ZBTB7B", "CD86", "CCR6", "GZMB", "CXCR3", "CD274", "SPI1", "RORC", "KIR_Inhibiting_Subgroup_1", "CDKN1B", "YWHAZ", "HPRT1", "PRDM1", "KLRG1", "KIR_Activating_Subgroup_2", "IL6", "CD96", "PGK1", "CDKN2A (ARF)", "KIR_Inhibiting_Subgroup_2", "ITCH", "KIR_Activating_Subgroup_1", "PTPRC_2", "FOXP3", "IL2RA", "GUSB", "GATA3", "UBC", "EGR1", "PTPRC_1", "LAG3", "CD276", "IL-17A")
+# test.seq <- test.seq %>% select(Sample,
+# "TNFRSF18", "VTCN1", "CCR4", "AHR", "TIGIT", "NECTIN2", "IL-2", "CD28", "PDCD1", "IL-21", "IL-4", "B3GAT1", "RUNX3", "BTLA", "RORA", "CD4", "IL-10", "CD3D", "TGFB1", "CD160", "FOXO1", "CD3E", "ADORA2A", "PVRIG", "CTLA4", "TNF", "TNFRSF14", "CD127", "CD244", "SPN", "PTPRC_3", "BCL6", "CDKN2A (p16)", "CD27", "EOMES", "PDCD1LG2", "HAVCR2", "TBX21", "CEACAM1", "CD200R1", "CD8A", "IFNG", "CD80", "GRAIL", "C10orf54", "PVR", "ZBTB7B", "CD86", "CCR6", "GZMB", "CXCR3", "CD274", "SPI1", "RORC", "KIR_Inhibiting_Subgroup_1", "CDKN1B", "YWHAZ", "HPRT1", "PRDM1", "KLRG1", "KIR_Activating_Subgroup_2", "IL6", "CD96", "PGK1", "CDKN2A (ARF)", "KIR_Inhibiting_Subgroup_2", "ITCH", "KIR_Activating_Subgroup_1", "PTPRC_2", "FOXP3", "IL2RA", "GUSB", "GATA3", "UBC", "EGR1", "PTPRC_1", "LAG3", "CD276", "IL-17A")
+
+
+
+# top.c <- pt.char %>% select(Sample, Therapy, `BMI (kg/m2)`, `Platelets (K/uL)`,
+#                             `LDH (U/L)`, Stage, Age)
+# train.seq <- left_join(train.seq, top.c)
+# test.seq <- left_join(test.seq, top.c)
+
+
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+opt_aucpr_rec <- data.frame(genes = 79:1, Avg.AUCPR = NA)
+
+for (i in 1:79) {
+rf_rec_top_char <- kTest(seed_list, "Therapy complete", "Progression") 
+
+aucprs <- grabVals(aucprs, rf_rec_top_char, seed_list)
+
+avg <- mean(aucprs$AUCPR)
+
+opt_aucpr_rec$Avg.AUCPR[i] <- avg
+x = length(train.seq)
+train.seq <- train.seq[-x]
+test.seq <- test.seq[-x]
+
+Sys.sleep(2)
+}
+
+save(opt_aucpr_rec, file = "../Outputs/opt_aucpr_rec.Rdata")
+```
+
+
+```{r}
+
+load(file = "../Outputs/opt_aucpr_rec.Rdata")
+
+twenty_rec <- opt_aucpr_rec %>%
+  filter(genes <=20)
+
+rec_gene_number <- 1:nrow(twenty_rec)
+
+aucpr_plot <-ggplot(data = twenty_rec, mapping=aes(x = -genes, y = Avg.AUCPR, fill = Avg.AUCPR))+
+    scale_y_continuous(limits = c(0, 1)) +
+    scale_x_continuous("Number of genes", ) +
+    geom_bar(stat = "identity") +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    coord_flip()
+
+   
+
+# ggplot(df,aes(x,y,fill=y))+geom_bar(stat="identity")+scale_fill_gradient(low="blue",high="red")
+print(aucpr_plot)
+
+```
+
+
+```{r}
+
+load(file = "../Outputs/opt_aucpr_tox.Rdata")
+
+twenty_tox <- opt_aucpr_tox %>%
+  filter(genes <=20)
+
+aucpr_plot <-ggplot(data = twenty_tox, mapping=aes(x = -genes, y = Avg.AUCPR, fill = Avg.AUCPR))+
+    scale_y_continuous(limits = c(0, 1)) +
+    scale_x_continuous(n.breaks=20) +
+    geom_bar(stat = "identity") +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    coord_flip() +
+    xlab("Model") 
+   
+#x = reorder(genes, Avg.AUCPR) 
+# ggplot(df,aes(x,y,fill=y))+geom_bar(stat="identity")+scale_fill_gradient(low="blue",high="red")
+print(aucpr_plot)
+# ggsave("../figures/responsemodelperformance.png", height = 4, width = 7)
+
+```

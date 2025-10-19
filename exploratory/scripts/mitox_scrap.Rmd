@@ -46,11 +46,6 @@ load("../../data/ANCOM-BC2_irae_baseline.RData")
 Splitting by cohort and outcome
 ```{r}
 source("../mitox_functions.R")
-irAE_respondsig <- read.csv(file = "../Outputs/cleaned-metadata-expanded.csv") %>%
-  drop_na(irAE) %>%
-  filter(timepoint == "pre") %>%
-  filter(abs(days) <= 10)
-
 ```
 
 Splitting the data into training and testing
@@ -139,7 +134,7 @@ base.micro <- ra.l %>%
 irAE_q <- res.irae %>%
   left_join(phyl_labels) %>%
   select(microbe, q_irAEYes)  %>%
-  filter(q_irAEYes < 0.005) %>%
+  filter(q_irAEYes < 0.01) %>%
   replace_na(list( microbe = "k__Archaea"))
 
 
@@ -169,7 +164,7 @@ irAE_q_zero <- irAE_q %>%
 response_q <- res.recist %>%
   left_join(phyl_labels) %>%
   select(microbe, q_ResponseResponder)  %>%
-  filter(q_ResponseResponder < 0.005) %>%
+  filter(q_ResponseResponder < 0.01) %>%
   replace_na(list( microbe = "k__Archaea"))
 
 #structural 0 for response
@@ -208,7 +203,7 @@ irAEcombinedlist <- c(irAE_list, struct0.irae.list)
 ```
 
 
-Making responsesig objects and running model
+Making responsesig objects for response
 ```{r}
 #try splitting the dataset
 utils::data("met4ra", package = "respondersig")
@@ -327,6 +322,7 @@ test.seq <- arrange(test.seq, desc(sample))
 ```
 
 
+Response model for resondersig
 ```{r}
 #Response
 rf_responce <- kTest(seed_list, "Non-Responder", "Responder", "response", 2000)
@@ -377,6 +373,168 @@ print(response_plot)
 
 
 
+Making responsesig objects for irAE
+```{r}
+#try splitting the dataset
+utils::data("met4ra", package = "respondersig")
+irAE_respondsig <- read.csv(file = "../Outputs/cleaned-metadata-expanded.csv") %>%
+  drop_na(irAE) %>%
+  filter(timepoint == "pre") %>%
+  select(sample, irAE)
+
+
+met4ra$clade_name <- gsub(".*\\|", "", met4ra$clade_name)
+
+irAE_respondsig <- irAE_respondsig %>%
+  subset(irAE_respondsig$sample %in% met4ra$sample) 
+
+
+
+
+met4ra <- met4ra %>%
+  subset(met4ra$sample %in% irAE_respondsig$sample) %>%
+  select(clade_name, relative_abundance, sample) %>%
+  pivot_wider(names_from = clade_name, values_from = relative_abundance) %>% 
+  replace(is.na(.), 0)
+
+set.seed(42301)
+
+#splitting data into train and test
+split <- sample.split(irAE_respondsig$irAE, SplitRatio = 0.7)
+
+train  <- subset(irAE_respondsig, split == TRUE) %>%
+  subset(sample %in% met4ra$sample) %>%
+  arrange(desc(sample))
+
+test   <- subset(irAE_respondsig, split == FALSE) %>%
+  subset(sample %in% met4ra$sample) %>%
+  arrange(desc(sample))
+
+train.outcomes <- demographics %>%
+  select(`Patient Id`, irAE) %>%
+  # subset(`Patient Id` %in% train$`Patient Id`) %>%
+  # subset(`Patient Id` %in% blood$`Patient Id`) %>%
+  subset(`Patient Id` %in% baseline$`Patient Id`) %>%
+  arrange(desc(`Patient Id`))
+
+names(train.outcomes)[names(train.outcomes) == 'Patient Id'] <- 'sample'
+
+
+# train.outcomes <- demographics %>%
+#   select(sample, irAE) %>%
+#   subset(sample %in% train$sample) %>%
+#   subset(sample %in% met4ra$sample) %>%
+#   arrange(desc(sample))
+
+struct0.irae.rotate  <- struct0.irae.ft %>% 
+  pivot_wider(names_from = microbe, values_from = `structural_zero (irAE = No)`) 
+colnames(struct0.irae.rotate)[1] <- 'sample'
+
+#combining structural zero and irAE, 
+irAEcombinedlist <- c(irAE_list, names(struct0.irae.rotate))
+
+
+test.outcomes <- irAE_respondsig %>%
+  select(sample, irAE) %>%
+  # subset(sample %in% test$sample) %>%
+  subset(sample %in% met4ra$sample) %>%
+  arrange(desc(sample))
+
+test.outcomes$irAE[test.outcomes$irAE == 0] <- "Yes"
+test.outcomes$irAE[test.outcomes$irAE == 1] <- "No"
+
+
+irAE_list[[1]] <- "sample"
+struct0.irae.list[[1]] <- "sample"
+irAEcombinedlist[[1]] <- "sample"
+
+
+  
+#removing columns not present in respondersig or in structural zero
+strct0_cols <- intersect(names(met4ra), names(struct0.irae.rotate))
+q_cols <- intersect(names(met4ra), irAE_list)
+
+
+combined_cols <- intersect(names(met4ra), irAEcombinedlist)
+
+
+# coi <- q_cols
+# coi <- strct0_cols
+coi <- combined_cols
+
+met4ralim <- met4ra %>%
+  select((coi))
+
+
+microlim <- baseline %>%
+  select(sample, `Patient Id`) %>%
+  full_join(base.micro, baseline, by = "sample") %>%
+  select(-sample)
+
+names(microlim)[names(microlim) == 'Patient Id'] <- 'sample'
+
+microlim <- microlim %>%
+  select((coi))
+
+
+
+train.seq <- filter(microlim,
+                    (sample %in% train.outcomes$sample)) 
+
+
+train.seq <- arrange(train.seq, desc(sample))
+
+
+
+test.seq <- filter(met4ralim,
+                    (sample %in% test.outcomes$sample))
+test.seq <- arrange(test.seq, desc(sample))
+
+
+```
+
+
+irAE model for resondersig
+```{r}
+#Response
+rf_irAE <- kTest(seed_list, "No", "Yes", "irAE", 500)
+
+aucprs <- grabVals(aucprs, rf_irAE, seed_list)
+
+micro_only_irAEsig_500_qonestruct0 <- mean(aucprs$AUCPR)
+
+micro_only_irAEsig_500_qonestruct0 <- as.data.frame(micro_only_irAEsig_500_qonestruct0) %>%
+  rename(AUCPR = micro_only_irAEsig_500_qonestruct0) %>%
+  add_column("name" = "micro_only_irAEsig_500_qonestruct0", .before = "AUCPR")
+
+irAE_aucprs <- irAE_aucprs  %>%
+  add_row(micro_only_irAEsig_500_qonestruct0)
+
+aucprdf$micro_only_irAEsig_500_qonestruct0 <- aucprs$AUCPR
+
+remove(micro_only_irAEsig_500_qonestruct0)
+
+# irAE_aucprs <- irAE_aucprs[-c(35), ]
+
+```
+
+irAE plot
+```{r}
+irAE_for_plot  <- irAE_aucprs[c(5, 21, 31, 35, 36), ]
+
+irAE_plot <-ggplot(data = irAE_for_plot, mapping=aes(x = reorder(name, AUCPR) , y = AUCPR, fill = AUCPR))+
+    scale_y_continuous(limits = c(0, 1))+
+    geom_bar(stat = "identity") +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    coord_flip() + 
+    xlab("Model") 
+
+# ggplot(df,aes(x,y,fill=y))+geom_bar(stat="identity")+scale_fill_gradient(low="blue",high="red")
+print(irAE_plot)
+```
+
+
+
 ```{r}
 responseplot <- aucprdf %>%
   pivot_longer(-x, names_to = 'model', values_to = 'AUCPR') %>%
@@ -390,19 +548,6 @@ ggplot(data = responseplot, mapping=aes(x = model, y = AUCPR))+
 ```
 
 
-```{r}
-
-
-irae_plot <-ggplot(data = irAE_aucprs, mapping=aes(x = reorder(name, AUCPR) , y = AUCPR, fill = AUCPR))+
-    scale_y_continuous(limits = c(0, 1))+
-    geom_bar(stat = "identity") +
-    scale_fill_viridis_c(option = "magma", direction = -1) +
-    coord_flip() + 
-    xlab("Model") 
-
-# ggplot(df,aes(x,y,fill=y))+geom_bar(stat="identity")+scale_fill_gradient(low="blue",high="red")
-print(irae_plot)
-```
 
 
 Data for when using microbiome
@@ -648,7 +793,7 @@ biome_list <- colnames(limited_list) %>%
 
 ```{r}
 saveRDS(irAE_aucprs, file = "../Outputs/rf_mitox_irAE_aucpr.RData")
-
+irAE_aucprs <- readRDS("../Outputs/rf_mitox_irAE_aucpr.RData")
 
 Response_aucprs <- readRDS("../Outputs/rf_mitox_Response_aucpr.RData")
 
