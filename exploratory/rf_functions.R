@@ -13,13 +13,14 @@ met_sorting <- function(data, outcome1, outcome2){
 }
 
 
-k_validate <- function(seed, neg.outcome, pos.outcome){
+k_validate <- function(seed, neg.outcome, pos.outcome, modelversion, train.seq, test.seq, train.outcomes, test.outcomes){
   set.seed(seed)
   
+
   
   out <- list()
   
-  out[[1]] <- getROC(train.seq, train.outcomes, test.seq, test.outcomes, neg.outcome, pos.outcome)
+  out[[1]] <- getROC(seed, train.seq, train.outcomes, test.seq, test.outcomes, neg.outcome, pos.outcome, modelversion)
   
   
   avg_AUCPR <- lapply(out, function(x){ x[[1]]})
@@ -29,7 +30,68 @@ k_validate <- function(seed, neg.outcome, pos.outcome){
 
 
 # Function create and test RF model #
-getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outcome, pos.outcome){
+getROC <- function(seed, train.seq, train.outcomes, test.seq, test.outcomes, neg.outcome, pos.outcome, modelversion){
+  if (modelversion == "Boruta") {
+    ###################### Boruta for selection to the model ######################
+    set.seed(seed)
+    
+    # Drop Patient Id for modeling
+    x_train <- train.seq[ , -1, drop = FALSE ]
+    y_train <- as.factor(train.outcomes[["Reason.for.discontinuation"]])
+    
+    # Combine for Boruta formula interface
+    boruta_data <- cbind(y = y_train, x_train)
+    
+    # Run Boruta
+    bor <- Boruta(y ~ ., data = boruta_data, doTrace = 2, maxRuns = 2500)
+    
+    # try with more trees
+    # better for response but worse for irAE
+    # bor <- Boruta(y ~ .,
+    #               data = boruta_data,
+    #               maxRuns = 500,
+    #               doTrace = 1,
+    #               ntree = max(tree, 1000))
+    
+    # Resolve tentative features
+    bor_fixed <- TentativeRoughFix(bor)
+    
+    # Get confirmed features only
+    selected_vars <- getSelectedAttributes(bor_fixed, withTentative = FALSE)
+    
+    min_vars <- 1   # set your desired minimum number of predictors
+    
+    if(length(selected_vars) < min_vars){
+      warning("Boruta confirmed fewer than min_vars — including tentative features")
+      selected_vars <- getSelectedAttributes(bor_fixed, withTentative = TRUE)
+    }
+    
+    # still selecting 0 vars so need another fallback
+    # rank based RF selection - get top 5
+    if(length(selected_vars) < min_vars){
+      warning("Boruta still selected fewer than min_vars — filling with top RF importance features")
+      
+      # Fit quick RF on all predictors
+      rf_temp <- randomForest(x = x_train, y = y_train)#, ntree = max(500, tree))
+      
+      # Rank features by importance
+      imp <- importance(rf_temp)
+      top_vars <- rownames(imp)[order(-imp[,1])]
+      
+      # Add top features until min_vars is met
+      selected_vars <- unique(c(selected_vars, top_vars[1:min_vars]))
+    }
+    
+    message("\nBoruta selected ", length(selected_vars), " variables.")
+    
+    print(selected_vars)
+    
+    # Restrict train/test to selected features
+    train.seq <- train.seq[ , c("Sample", selected_vars), drop = FALSE ]
+    test.seq  <- test.seq [ , c("Sample", selected_vars), drop = FALSE ]
+    ###############################################################################
+  } 
+  
   if(all(train.seq$Sample == train.outcomes$Sample) == FALSE){
     stop("Training Sample_IDs do not match")
   }
@@ -62,7 +124,7 @@ getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outco
   # scores <- data.frame(prediction_for_roc_curve[,2], test.outcomes$Reason.for.discontinuation)
   # 
   # scores <- scores %>%
-  #   mutate(score = case_when((test.outcomes.Reason.for.discontinuation == "Therapy complete") ~ 1,
+  #   mutate(score = case_when((test.outcomes.Reason.for.discontinuation == neg.outcome) ~ 1,
   #                            TRUE ~ 0))
   # print(prediction_for_roc_curve[,2])
   # aucpr <- pr.curve(scores.class0=scores[scores$score=="0",]$`prediction_for_roc_curve...2.`,
@@ -81,8 +143,14 @@ getROC <- function(train.seq, train.outcomes, test.seq, test.outcomes, neg.outco
   
   df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
                    TruePositive=c(perf@y.values[[1]]))
-  out <- list(AUCPR, df, pred_cm)
   
+  if (modelversion == "Boruta") {
+    out <- list(AUCPR, df, pred_cm, selected_vars)
+  }
+  else
+  {
+    out <- list(AUCPR, df, pred_cm)
+  }
   return(out)
 }
 
@@ -102,10 +170,58 @@ grabVals <- function(output, input, seed_list){
 
 
 # Main function call to generate RF models using 25 seeds #
-kTest <- function(seed_list, neg.outcome, pos.outcome){
+kTest <- function(seed_list, neg.outcome, pos.outcome, modelversion, outcomeobject, dataobject, traincohort, testcohort, genelist){
+  
+  train.outcomes <- sorting(outcomeobject,
+                            traincohort,
+                            neg.outcome,
+                            pos.outcome)
+  
+  train.outcomes <- arrange(train.outcomes, desc(Sample))
+  
+  
+  test.outcomes <- sorting(outcomeobject,
+                           testcohort,
+                           neg.outcome,
+                           pos.outcome)
+  
+  test.outcomes <- arrange(test.outcomes, desc(Sample))
+  
+  
+  train.seq <- filter(dataobject,
+                      (Sample %in% train.outcomes$Sample))
+  train.seq <- arrange(train.seq, desc(Sample))
+  
+  
+  test.seq <- filter(dataobject,
+                     (Sample %in% test.outcomes$Sample))
+  test.seq <- arrange(test.seq, desc(Sample))
+  
+  
+  train.outcomes <-
+    train.outcomes %>%
+    select(Sample,
+           `Reason.for.discontinuation`)
+  
+  
+  test.outcomes <-
+    test.outcomes %>%
+    select(Sample,
+           `Reason.for.discontinuation`)
+  
+  train.seq <- train.seq %>% select(Sample, 
+                                    genelist
+  )
+  
+  test.seq <- test.seq %>% select(Sample, 
+                                  genelist
+  )
+  
+  
+
   out <- list()
   for(i in 1:length(seed_list)){
-    out[[i]] <- k_validate(seed = seed_list[i], neg.outcome, pos.outcome)
+    out[[i]] <- k_validate(seed = seed_list[i], neg.outcome, pos.outcome, modelversion, train.seq, test.seq, train.outcomes, test.outcomes)
   }
   # out <- grabVals(out)
   # CW edit to function
@@ -138,7 +254,7 @@ p.calc <- function(data, random){
 
 
 
-add.metrics <- function(dataobject, output, pos.outcome){
+add.metrics <- function(randomdata, output, pos.outcome){
   test_conmat2 <- data.frame(run = 1:25000,
                              Accuracy = NA,
                              Specificity = NA,
@@ -147,7 +263,7 @@ add.metrics <- function(dataobject, output, pos.outcome){
                              F1 = NA)
   
   for (i in 1:25000) {
-    test_conmat <- confusionMatrix(dataobject[[i]][[1]][[3]],
+    test_conmat <- confusionMatrix(randomdata[[i]][[1]][[3]],
                                    positive = pos.outcome)
     
     test_conmat2$Accuracy[i] <- test_conmat[[3]][1]
@@ -181,4 +297,30 @@ add.metrics <- function(dataobject, output, pos.outcome){
   output
 }
 
+
+get_vars <- function(myList) {
+  unique(unlist(lapply(myList, function(x) rownames(x[[1]][[4]]))))
+}
+
+grabImp <- function(input, seed_list){
+  
+  out <- list()
+  
+  for (i in seq_along(seed_list)) {
+    
+    # Extract getROC() output for this seed
+    res <- input[[i]][[1]]
+    
+    impdf <- res[[4]] %>%   # Genes selected by boruta
+      as.data.frame() 
+    
+    impdf$seed  <- seed_list[i]
+    impdf$run_number  <- i
+    
+    out[[i]] <- impdf
+  }
+  
+  # bind into one big data frame
+  dplyr::bind_rows(out)
+}
 

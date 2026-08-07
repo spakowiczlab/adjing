@@ -1,0 +1,217 @@
+---
+title: "XGBoost_split_rec"
+author: "Noah Lepola"
+date: "2024-08-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(xgboost)
+library(tidyverse)
+library(caret)
+```
+
+Loading file
+```{r}
+load(file = "../Outputs/xgb.char")
+load(file = "../Outputs/pt.status_no_ipi")
+load(file = "../Outputs/gene.exp")
+
+```
+
+```{r}
+source("../xgb_functions.R")
+```
+
+
+Splitting by cohort and outcome
+```{r}
+
+
+adj.char <- left_join(gene.exp, xgb.char,
+                      by = join_by("Sample" == "Sample" ))
+
+adj.outcomes <- outcome.creation("Adj", "Progression")
+
+val.outcomes <- outcome.creation("Adj Validation", "Progression")
+
+
+g.and.c.data.adj <- filter(adj.char, (Sample %in% adj.outcomes$Sample))
+
+g.and.c.data.val <- filter(adj.char, (Sample %in% val.outcomes$Sample))
+
+
+val.data.outcomes <- left_join(val.outcomes,
+                               g.and.c.data.val,
+                               by = join_by("Sample" == "Sample" ))
+
+adj.data.outcomes <- left_join(adj.outcomes,
+                               g.and.c.data.adj,
+                               by = join_by("Sample" == "Sample" ))
+
+train.data <- adj.data.outcomes %>%
+    select(
+      # `Reason.for.discontinuation`,
+                                  CD160,
+                                  GZMB
+         # ADORA2A:YWHAZ
+          )
+  # select(-Sample, -Reason.for.discontinuation, -Cohort)
+
+train.label <- adj.data.outcomes %>%
+  select(Reason.for.discontinuation) %>% 
+  mutate(Reason.for.discontinuation = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 0, TRUE ~ 1))
+
+
+
+test.data <- val.data.outcomes %>%
+    select(
+      # `Reason.for.discontinuation`,
+                                  CD160,
+                                  GZMB
+         # ADORA2A:YWHAZ
+          )
+  # select(-Sample, -Reason.for.discontinuation, -Cohort)
+
+test.label <- val.data.outcomes %>%
+  select(Reason.for.discontinuation) %>% 
+  mutate(Reason.for.discontinuation = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 0, TRUE ~ 1))
+
+xgb.train = xgb.DMatrix(data = as.matrix(train.data),
+                        label = as.matrix(train.label))
+
+xgb.test = xgb.DMatrix(data = as.matrix(test.data), 
+                       label = as.matrix(test.label))
+
+```
+
+
+
+```{r}
+
+xgb_rec <- data.frame(run = 1, F1 = NA)
+
+watchlist = list(train=xgb.train, test=xgb.test)
+
+bst <- xgb.train(data = xgb.train,
+                    max.depth = 3,
+                    eta = 0.1,
+                    nrounds = 100,
+                    watchlist = watchlist,
+                    verbose = 0,
+                    objective = "binary:logistic",
+                    eval_metric = 'aucpr',
+                    scale_pos_weight = 1,
+                    early_stopping_rounds = 25)
+
+
+pred <- predict(bst, xgb.test)
+
+pred <-  as.numeric(pred > 0.5)
+
+test.label.vector <- as.vector(test.label$Reason.for.discontinuation)
+
+bop100 <- confusionMatrix(factor(pred), factor(test.label.vector), positive = "1")
+xgb_rec$F1 <- bop100[[4]][7]
+print(bop100[[4]][7])
+importance_matrix <- xgb.importance(model = bst)
+print(importance_matrix)
+xgb.plot.importance(importance_matrix = importance_matrix)
+
+
+```
+
+```{r}
+run_number <- 1:1000
+seed_list <- c(12345:13344)
+
+xgb_rec_random <- data.frame(run = run_number, F1 = NA)
+```
+
+```{r}
+
+for (i in 1:length(run_number)) {
+  
+set.seed(seed_list[i])
+
+train.label$Reason.for.discontinuation<- 
+  (sample(train.label$Reason.for.discontinuation))
+  
+
+test.label$Reason.for.discontinuation<- 
+  (sample(test.label$Reason.for.discontinuation))
+
+
+xgb.train = xgb.DMatrix(data = as.matrix(train.data),
+                        label = as.matrix(train.label))
+
+xgb.test = xgb.DMatrix(data = as.matrix(test.data),
+                       label = as.matrix(test.label))
+
+watchlist = list(train=xgb.train, test=xgb.test)
+
+  
+randommodel <- xgb.train(data = xgb.train,
+                    max.depth = 3,
+                    eta = 0.1,
+                    nrounds = 100,
+                    watchlist = watchlist,
+                    verbose = 0,
+                    objective = "binary:logistic",
+                    eval_metric = 'aucpr',
+                    scale_pos_weight = 1,
+                    early_stopping_rounds = 25)
+
+randompred <- predict(randommodel, xgb.test)
+
+randompred <-  as.numeric(randompred > 0.5)
+
+test.label.vector <- as.vector(test.label$Reason.for.discontinuation)
+
+suppressWarnings(
+randomcm <- confusionMatrix(factor(randompred), factor(test.label.vector), positive = "1")
+)
+
+xgb_rec_random$F1[i] <- randomcm[[4]][7]
+# print(randomcm[[4]][7])
+# print(i)
+}
+# write_csv(xgb_rec_aucpr, file = "xgb_rec_random_1000")
+
+```
+
+
+
+
+```{r}
+xgb_rec_random$F1[is.na(xgb_rec_random$F1)] <- 0
+
+# cat(xgb_rec_random$F1, sep = "\n")
+
+
+p.calc(xgb_rec$F1, xgb_rec_random$F1)
+
+
+```
+
+
+
+
+```{r}
+metrics_plot <- ggplot(data = xgb_rec_random, aes(x = F1)) + 
+  geom_density() +
+  geom_vline(xintercept = xgb_rec$F1, color = "red")
+
+print(metrics_plot)
+
+```
+
+
+
+
+
+

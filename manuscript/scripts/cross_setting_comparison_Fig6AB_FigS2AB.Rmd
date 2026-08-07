@@ -1,0 +1,303 @@
+---
+title: "cross setting comparison Fig6AB FigS2AB"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(caret)
+```
+
+Loading file
+```{r}
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+#Creating objects for runs
+```{r}
+#joining nanostring and outcomes for both adjuvant and metastatic
+crossover_outcomes <- full_join(pt_status, met_outcomes)
+crossover_data <- full_join(gene_exp, met_data)
+adjtrain_rec_list <- c("CD160", "GZMB")
+mettrain_pro_list <- c("PTPRC_3")
+adjtrain_tox_list <- c("TNFRSF18", "VTCN1", "CCR4", "AHR", "TIGIT")
+mettrain_tox_list <- c("CD80", "CEACAM1", "SPI1", "SPN", "HAVCR2")
+#Unshuffled 
+seed_list <- c(12345:12369)
+#Shuffled
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+```
+
+#p calc function
+```{r}
+#met.p.calc
+```
+
+
+#metric_graph
+```{r}
+
+```
+
+
+#Adj rec train meta pro test
+```{r}
+#running predictive model
+rf_rec_adjtrain <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     crossover_outcomes,
+                     crossover_data,
+                     "Adj",
+                     "Met Validation",
+                     adjtrain_rec_list) 
+
+
+saveRDS(rf_rec_adjtrain, file = "../Outputs/rf_rec_adjtrain.RData")
+
+rf_rec_adjtrain_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        crossover_outcomes,
+                                        crossover_data,
+                                        "Adj",
+                                        "Met Validation",
+                                        adjtrain_rec_list
+)
+
+
+
+saveRDS(rf_rec_adjtrain_random, file = "../Outputs/rf_rec_adjtrain_random.RData")
+
+
+rec.adjtrain <- met.p.calc(rf_rec_adjtrain_random,
+                        "Progression",
+                       rf_rec_adjtrain)
+
+
+metric_graph(rf_rec_adjtrain_random,
+             "Progression",
+             rf_rec_adjtrain,
+             "(84.8 %ile)", 
+             NULL,
+             1.25)
+```
+
+
+#Meta train pro Adj test rec
+```{r}
+#running predictive model
+rf_pro_metatrain <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     crossover_outcomes,
+                     crossover_data,
+                     "Met Discovery",
+                     "Adj Validation",
+                     mettrain_pro_list) 
+
+
+saveRDS(rf_pro_metatrain, file = "../Outputs/rf_pro_metatrain.RData")
+
+rf_pro_metatrain_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        crossover_outcomes,
+                                        crossover_data,
+                                        "Met Discovery",
+                                        "Adj Validation",
+                                        mettrain_pro_list
+)
+
+
+
+saveRDS(rf_pro_metatrain_random, file = "../Outputs/rf_pro_metatrain_random.RData")
+
+
+pro_metatrain <- met.p.calc(rf_pro_metatrain_random,
+                        "Progression",
+                       rf_pro_metatrain)
+
+
+metric_graph(rf_pro_metatrain_random,
+             "Progression",
+             rf_pro_metatrain,
+             "(82.5 %ile)", 
+             NULL,
+             2)
+```
+
+
+
+
+
+
+#Adj tox train Meta tox test
+```{r}
+#running predictive model
+rf_tox_adjtrain <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     crossover_outcomes,
+                     crossover_data,
+                     "Adj",
+                     "Met Validation",
+                     adjtrain_tox_list) 
+
+
+saveRDS(rf_tox_adjtrain, file = "../Outputs/rf_tox_adjtrain.RData")
+
+rf_tox_adjtrain_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        crossover_outcomes,
+                                        crossover_data,
+                                        "Adj",
+                                        "Met Validation",
+                                        adjtrain_tox_list
+)
+
+
+
+saveRDS(rf_tox_adjtrain_random, file = "../Outputs/rf_tox_adjtrain_random.RData")
+
+
+tox_adjtrain <- met.p.calc(rf_tox_adjtrain_random,
+                        "Toxicity",
+                       rf_tox_adjtrain)
+
+
+metric_graph(rf_tox_adjtrain_random,
+             "Toxicity",
+             rf_tox_adjtrain,
+             "(93.4 %ile)", 
+             NULL,
+             4)
+```
+
+
+#Meta tox train Adj tox test
+```{r}
+
+#running predictive model
+rf_tox_metatrain <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     crossover_outcomes,
+                     crossover_data,
+                     "Met Discovery",
+                     "Adj Validation",
+                     mettrain_tox_list) 
+
+
+saveRDS(rf_tox_metatrain, file = "../Outputs/rf_tox_metatrain.RData")
+
+rf_tox_metatrain_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        crossover_outcomes,
+                                        crossover_data,
+                                        "Met Discovery",
+                                        "Adj Validation",
+                                        mettrain_tox_list
+)
+
+
+
+saveRDS(rf_tox_metatrain_random, file = "../Outputs/rf_tox_metatrain_random.RData")
+
+
+
+
+tox_metatrain <- met.p.calc(rf_tox_metatrain_random,
+                        "Toxicity",
+                        rf_tox_metatrain)
+
+
+metric_graph(rf_tox_metatrain_random,
+             "Toxicity",
+             rf_tox_metatrain,
+             "(68.8 %ile)", 
+             NULL,
+             2.5)
+```
+
+
+
+
+
+#Adj trained Recurrence Fig 6A
+```{r}
+single.graph(rf_rec_adjtrain_random, 
+              rf_rec_adjtrain,
+             "Adj\nTrained Null", 
+             "Adj Trained", 
+             "Progression")
+
+ggsave("../figures/AdjTrainRecCrossCohort.png", width = 5.5, height = 7)
+
+
+```
+
+#Meta trained Pro Fig 6B
+```{r}
+single.graph(rf_pro_metatrain_random, 
+              rf_pro_metatrain,
+             "Meta\nTrained Null", 
+             "Meta Trained", 
+             "Progression")
+
+ggsave("../figures/MetaTrainRecCrossCohort.png", width = 5.5, height = 7)
+
+
+```
+
+#Adj trained Tox Fig S2A
+```{r}
+single.graph(rf_tox_adjtrain_random, 
+              rf_tox_adjtrain,
+             "Adj\nTrained Null", 
+             "Adj Trained", 
+             "Toxicity")
+
+ggsave("../figures/AdjTrainToxCrossCohort.png", width = 5.5, height = 7)
+
+
+```
+
+
+#Meta Train Tox Fig S2B
+```{r}
+single.graph(rf_tox_metatrain_random, 
+              rf_tox_metatrain,
+             "Meta\nTrained Null", 
+             "Meta Trained", 
+             "Toxicity")
+
+ggsave("../figures/MetaTrainToxCrossCohort.png", width = 5.5, height = 7)
+
+
+```
+

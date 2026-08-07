@@ -1,0 +1,57 @@
+---
+title: "Adj gene and clinical characteristics"
+author: "Noah Lepola"
+date: "2024-12-16"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(tableone)
+
+```
+
+
+```{r}
+#creating data frame of just the nanostring/characteristics
+
+#Reading in nanostring data file
+nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 2) %>%
+  drop_na(Sample)
+
+#getting all names to the same format
+nano.data$Sample <-gsub(" ", "-", nano.data$Sample)
+
+g.and.c.data <- subset(nano.data, Therapy != "Ipilimumab")
+
+#formatting therapy and stage
+IV <- c("IV")
+IIIvalues <- c("IIIC", "IIIB", "IIIA", "III")
+III <- paste(IIIvalues, collapse = "|")
+IIvalues <- c("IIC", "IIB", "IIA", "II")
+II <- paste(IIvalues, collapse = "|")
+start.stage <- g.and.c.data$`Stage (7th ed.) prior to therapy`
+
+
+g.and.c.data$Stage <- ifelse(grepl(III, start.stage), as.character("3"),
+                          ifelse(grepl(IV, start.stage), as.character("4"),
+                                ifelse(grepl(II, start.stage), as.character("2"), as.character("1"))))
+
+
+gene_exp <- g.and.c.data %>%
+  select(Sample, ADORA2A:YWHAZ)
+
+saveRDS(gene_exp, file = "../Outputs/gene_exp.RData")
+
+pt_char <- g.and.c.data %>%
+  select(Sample, Age, `BMI (kg/m2)`, `Platelets (K/uL)`, `LDH (U/L)`, Stage, Therapy, Sex)
+
+saveRDS(pt_char, file = "../Outputs/pt_char.RData")
+
+
+```
+
+
+

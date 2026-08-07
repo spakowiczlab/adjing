@@ -1,0 +1,92 @@
+---
+title: "tableone"
+author: "Noah Lepola"
+date: "2024-12-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tableone)
+library(tidyverse)
+
+```
+
+
+Loading files
+```{r}
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status_no_ipi")
+
+pt.char <- pt.char %>%
+  filter(Sample %in% pt.status$Sample)
+```
+
+
+Combining everything to be used in the table
+```{r}
+pt.char.status <- full_join(pt.status, pt.char)
+
+pt.char.status <- pt.char.status %>% select(!Sample)
+```
+
+Splitting data to be used in different outcome tables
+```{r}
+tc.tox <-filter(pt.char.status, `Reason.for.discontinuation` == 
+      "Therapy complete" | `Reason.for.discontinuation` == "Toxicity") 
+
+tc.rec <-filter(pt.char.status, `Reason.for.discontinuation` ==
+      "Therapy complete" | `Reason.for.discontinuation` == "Progression")
+```
+
+Creating objects for first table
+```{r}
+vars <- c("Sex", "Reason.for.discontinuation", "Age", "BMI (kg/m2)", "Platelets (K/uL)", "LDH (U/L)",
+           "Stage", "Therapy")
+```
+
+
+Making Table One separated by cohort
+```{r}
+pt.char.status[pt.char.status$Reason.for.discontinuation != "Therapy complete" & pt.char.status$Reason.for.discontinuation != "Toxicity" & pt.char.status$Reason.for.discontinuation != "Progression", "Reason.for.discontinuation"] <- "Other"
+
+pt.char.status[pt.char.status$Cohort == "Adj Validation", "Cohort"] <- "Validation"
+pt.char.status[pt.char.status$Cohort == "Adj", "Cohort"] <- "Exploratory"
+
+
+cohort.strat <- CreateTableOne(vars = vars, strata = "Cohort",
+                               data = pt.char.status, test = TRUE)
+cohort.strat
+
+knitr::kable(print(cohort.strat, showAllLevels = TRUE))
+```
+
+Creating objects for second and third table
+```{r}
+
+vars23 <- c("Age", "BMI (kg/m2)", "Platelets (K/uL)", "LDH (U/L)",
+           "Stage", "Therapy")
+```
+
+Making Table One separated by outcome (therapy complete vs toxicity)
+```{r}
+TCvsTOX.strat <- CreateTableOne(vars = vars23, strata = 
+                "Reason.for.discontinuation", data = tc.tox, test = TRUE) 
+
+TCvsTOX.strat 
+```
+
+
+Making Table One separated by outcome (therapy complete vs recurrence)
+```{r}
+tc.rec$Reason.for.discontinuation <- factor(tc.rec$Reason.for.discontinuation,
+                levels = c("Therapy complete", "Progression"))
+
+TCvsREC.strat <- CreateTableOne(vars = vars23, strata =
+                "Reason.for.discontinuation", data = tc.rec, test = TRUE)
+  
+TCvsREC.strat
+
+```
+

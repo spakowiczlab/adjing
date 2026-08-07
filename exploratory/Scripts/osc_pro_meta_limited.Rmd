@@ -1,0 +1,250 @@
+---
+title: "aucpr_and_cfm_template"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+```
+
+Loading file
+```{r}
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+met_char <-  readRDS(file = "../Outputs/met_cohort_char.RData")
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+load(file = "../Outputs/prometa_bestmodel_list.Rdata")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+Splitting the cohorts into the 
+```{r}
+train.outcomes <- sorting(met_outcomes,
+                          "Met Discovery",
+                          "Therapy complete",
+                          "Progression")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(met_outcomes,
+                        "Met Validation",
+                        "Therapy complete",
+                        "Progression")
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(met_data,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(met_data,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+```
+
+```{r}
+train.outcomes <-
+  train.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+test.outcomes <-
+  test.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+```
+
+
+```{r}
+train.seq <- train.seq %>% select(Sample, 
+                                  `IL-4`
+                                  )
+
+test.seq <- test.seq %>% select(Sample, 
+                                  `IL-4`
+                                  )
+```
+
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+rf_pro_meta <- kTest(seed_list, "Therapy complete", "Progression", "Model") 
+
+aucprs <- grabVals(aucprs, rf_pro_meta, seed_list)
+
+aucprs_avg <- mean(aucprs$AUCPR)
+aucprs_avg
+
+aucprs_max <- max(aucprs$AUCPR)
+aucprs_max
+
+
+p_values <- fishing(p_values, rf_pro_meta, seed_list)
+
+p_values_avg <- mean(p_values$p.value)
+p_values_avg
+
+p_values_min <- min(p_values$p.value)
+p_values_min
+
+
+saveRDS(rf_pro_meta, file = "../Outputs/rf_pro_meta_limitedlist.RData")
+
+
+
+```
+
+
+Creating objects for runs, including making a new longer seed list for use in shuffling
+```{r}
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+rf_pro_meta_random_1000 <- data.frame(run = run_number,
+                                 Average_AUCPR = NA,
+                                 max_aucpr = NA,
+                                 min_aucpr = NA,
+                                 sd_aucpr = NA,
+                                 first_q_aucpr = NA,
+                                 middle_q_aucpr = NA,
+                                 third_q_aucpr = NA,
+                                 Average_p_value = NA,
+                                 max_p_value = NA,
+                                 min_p_value = NA,
+                                 sd_p_value = NA,
+                                 first_q_p_value = NA,
+                                 middle_q_p_value = NA,
+                                 third_q_p_value = NA
+                                 )
+rf_pro_meta_random_25000 <- list()
+```
+
+
+
+```{r}
+for (j in 1:length(run_number)) {
+  set.seed(seed_list_r[j])
+
+    train.outcomes$Reason.for.discontinuation<-
+    (sample(train.outcomes$Reason.for.discontinuation))
+
+  test.outcomes$Reason.for.discontinuation<-
+    (sample(test.outcomes$Reason.for.discontinuation))
+
+  rf_random <- kTest(seed_list, "Therapy complete", "Progression", "Random")
+
+  rf_pro_meta_random_25000 <- append(rf_pro_meta_random_25000, rf_random)
+
+  aucprs_random <- grabVals(aucprs_random, rf_random, seed_list)
+  
+  avg_aucpr <- mean(aucprs_random$AUCPR)
+  rf_pro_meta_random_1000[j, 2] <- avg_aucpr
+  
+  
+  max_aucpr <- max(aucprs_random$AUCPR)
+  rf_pro_meta_random_1000[j, 3] <- max_aucpr
+  
+  
+  min_aucpr <- min(aucprs_random$AUCPR)
+  rf_pro_meta_random_1000[j, 4] <- min_aucpr
+  
+  
+  sd_aucpr <- sd(aucprs_random$AUCPR)
+  rf_pro_meta_random_1000[j, 5] <- sd_aucpr
+  
+  
+  first_q_aucpr <- quantile(aucprs_random$AUCPR, probs = c(0.25))
+  rf_pro_meta_random_1000[j, 6] <- first_q_aucpr
+  
+
+  middle_q_aucpr <- quantile(aucprs_random$AUCPR, probs = c(0.5))
+  rf_pro_meta_random_1000[j, 7] <- middle_q_aucpr
+    
+
+  third_q_aucpr <- quantile(aucprs_random$AUCPR, probs = c(0.75))
+  rf_pro_meta_random_1000[j, 8] <- third_q_aucpr
+    
+
+  
+
+  p_values_random <- fishing(p_values_random, rf_random, seed_list)
+  avg_p_values <- mean(p_values_random$p.value)
+  rf_pro_meta_random_1000[j, 9] <- avg_p_values
+  
+  max_p_value <- max(p_values_random$p.value)
+  rf_pro_meta_random_1000[j, 10] <- max_p_value
+  
+  min_p_value <- min(p_values_random$p.value)
+  rf_pro_meta_random_1000[j, 11] <- min_p_value
+  
+  
+  sd_p_value <- sd(p_values_random$p.value)
+  rf_pro_meta_random_1000[j, 12] <- sd_p_value
+  
+  
+  first_q_p_value <- quantile(p_values_random$p.value, probs = c(0.25))
+  rf_pro_meta_random_1000[j, 13] <- first_q_p_value
+  
+
+  middle_q_p_value <- quantile(p_values_random$p.value, probs = c(0.5))
+  rf_pro_meta_random_1000[j, 14] <- middle_q_p_value
+    
+
+  third_q_p_value <- quantile(p_values_random$p.value, probs = c(0.75))
+  rf_pro_meta_random_1000[j, 15] <- third_q_p_value
+  
+    
+}
+```
+
+
+```{r}
+
+saveRDS(rf_pro_meta_random_1000, file = "../Outputs/rf_pro_meta_limitedlist_random_1000.RData")
+saveRDS(rf_pro_meta_random_25000, file = "../Outputs/rf_pro_meta_limitedlist_random_25000.RData")
+
+```
+
+
+```{r}
+
+
+pro_aucpr_avg <- p.calc(aucprs_avg,
+                       rf_pro_meta_random_1000$Average_AUCPR)
+
+pro_aucpr_max <- p.calc(aucprs_max,
+                       rf_pro_meta_random_1000$max_aucpr)
+
+pro_p_value_avg <- p.calc(p_values_avg,
+                       rf_pro_meta_random_1000$Average_p_value)
+
+pro_p_value_min <- p.calc(p_values_min,
+                       rf_pro_meta_random_1000$min_p_value)
+
+
+pro_aucpr_avg
+pro_aucpr_max
+pro_p_value_avg
+pro_p_value_min
+```
+

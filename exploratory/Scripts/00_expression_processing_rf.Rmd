@@ -1,0 +1,85 @@
+---
+title: "00_expression_processing_adjing"
+author: "Noah Lepola"
+date: "2024-12-16"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(tableone)
+
+```
+
+
+```{r}
+#creating data frame of just the nanostring/characteristics
+
+#Reading in nanostring data file
+nano.data <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 2) %>%
+  drop_na(Sample)
+
+#getting all names to the same format
+nano.data$Sample <-gsub(" ", "-", nano.data$Sample)
+
+g.and.c.data <- subset(nano.data, Therapy != "Ipilimumab")
+
+#formatting therapy and stage
+IV <- c("IV")
+IIIvalues <- c("IIIC", "IIIB", "IIIA", "III")
+III <- paste(IIIvalues, collapse = "|")
+IIvalues <- c("IIC", "IIB", "IIA", "II")
+II <- paste(IIvalues, collapse = "|")
+start.stage <- g.and.c.data$`Stage (7th ed.) prior to therapy`
+
+
+g.and.c.data$Stage <- ifelse(grepl(III, start.stage), as.character("3"),
+                          ifelse(grepl(IV, start.stage), as.character("4"),
+                                ifelse(grepl(II, start.stage), as.character("2"), as.character("1"))))
+#Adding just number for stage
+
+# IV <- c("IV")
+# IIID <- c("IIID")
+# IIIC <- c("IIIC")
+# IIIB <- c("IIIB")
+# IIIA <- c("IIIA")
+# IIC <- c("IIC")
+# IIB <- c("IIB")
+# IIA <- c("IIA")
+# IB <- c("IB")
+# IA <- c("IA")
+# start.stage.adj <- tc.rec.df.adj$`Stage (7th ed.) prior to therapy`
+# start.stage.val <- tc.rec.df.val$`Stage (7th ed.) prior to therapy`
+# 
+# tc.rec.df.adj$Stage <- ifelse(grepl(IV, start.stage.adj), as.numeric("10"),
+#                           ifelse(grepl(IIID, start.stage.adj), as.numeric("9"),
+#                                  ifelse(grepl(IIIC, start.stage.adj), as.numeric("8"),
+#                                         ifelse(grepl(IIIB, start.stage.adj), as.numeric("7"),
+#                                                ifelse(grepl(IIIA, start.stage.adj), as.numeric("6"),
+#                                                       ifelse(grepl(IIC, start.stage.adj), as.numeric("5"),
+#                                                              ifelse(grepl(IIB, start.stage.adj), as.numeric("4"),
+#                                                                     ifelse(grepl(IIA, start.stage.adj), as.numeric("3"),
+#                                                                            ifelse(grepl(IB, start.stage.adj), as.numeric("2"),
+#                                                                                   ifelse(grepl(IA, start.stage.adj), as.numeric("1"), as.numeric("0")))))))))))
+# tc.rec.df.adj <- subset(tc.rec.df.adj, Stage != 0) 
+
+
+gene.exp <- g.and.c.data %>%
+  select(Sample, ADORA2A:YWHAZ)
+
+
+save(gene.exp, file = "../Outputs/gene.exp")
+
+pt.char <- g.and.c.data %>%
+  select(Sample, Age, `BMI (kg/m2)`, `Platelets (K/uL)`, `LDH (U/L)`, Stage, Therapy, Sex)
+
+
+save(pt.char, file = "../Outputs/pt.char")
+
+
+```
+
+
+

@@ -1,0 +1,124 @@
+---
+title: "Boruta transcript counts"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(Boruta)
+```
+
+Loading file
+```{r}
+
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+
+```
+
+```{r}
+source("../rf_functions.R")
+```
+
+```{r}
+full_list <- colnames(gene_exp)[2:length(gene_exp)]
+
+seed_list <- c(12345:12369)
+```
+
+#adj recurrence
+```{r}
+rf_rec_boruta <- kTest(seed_list,
+                       "Therapy complete",
+                       "Progression",
+                       "Boruta", 
+                       pt_status,
+                       gene_exp, 
+                       "Adj",
+                       "Adj Validation",
+                       full_list
+                       ) 
+
+adj_rec_borutalist <- grabImp(rf_rec_boruta, seed_list)
+
+saveRDS(adj_rec_borutalist, file = "../Outputs/adj_rec_borutalist.RData")
+
+table(adj_rec_borutalist$.)
+
+
+```
+
+#adj tox
+```{r}
+rf_tox_boruta <- kTest(seed_list,
+                       "Therapy complete",
+                       "Toxicity",
+                       "Boruta", 
+                       pt_status,
+                       gene_exp, 
+                       "Adj",
+                       "Adj Validation",
+                       full_list
+                       ) 
+
+adj_tox_borutalist <- grabImp(rf_tox_boruta, seed_list)
+
+saveRDS(adj_tox_borutalist, file = "../Outputs/adj_tox_borutalist.RData")
+
+table(adj_tox_borutalist$.)
+
+
+```
+
+#metastatic progression
+```{r}
+rf_pro_boruta <- kTest(seed_list,
+                       "Therapy complete",
+                       "Progression",
+                       "Boruta", 
+                       met_outcomes,
+                       met_data, 
+                       "Met Discovery",
+                       "Met Validation",
+                       full_list
+                       ) 
+
+met_pro_borutalist <- grabImp(rf_pro_boruta, seed_list)
+
+saveRDS(met_pro_borutalist, file = "../Outputs/met_pro_borutalist.RData")
+
+table(met_pro_borutalist$.)
+
+```
+
+#metastatic toxicity
+```{r}
+rf_toxM_boruta <- kTest(seed_list,
+                       "Therapy complete",
+                       "Toxicity",
+                       "Boruta", 
+                       met_outcomes,
+                       met_data, 
+                       "Met Discovery",
+                       "Met Validation",
+                       full_list
+                       ) 
+
+met_tox_borutalist <- grabImp(rf_toxM_boruta, seed_list)
+
+saveRDS(met_tox_borutalist, file = "../Outputs/met_tox_borutalist.RData")
+
+table(met_tox_borutalist$.)
+
+```
+

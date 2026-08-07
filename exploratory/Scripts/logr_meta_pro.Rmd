@@ -1,0 +1,112 @@
+---
+title: "logr_adj_joined_all_split"
+author: "Noah Lepola"
+date: "2024-06-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(broom)
+library(ggrepel)
+
+```
+
+Loading file
+```{r}
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+```
+
+Splitting by cohort and outcome
+```{r}
+pt.status <- filter(met_outcomes, Sample %in% met_data$Sample)
+tc.pro.outcomes <- filter(pt.status, Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+tc.pro.data <- filter(met_data, (Sample %in% tc.pro.outcomes$Sample))
+```
+
+
+```{r}
+#renaming column and merging 
+tc.pro.df <- left_join(tc.pro.outcomes, tc.pro.data, by = c("Sample" = "Sample" ))
+#adding numbers for outcome
+tc.pro.df <- tc.pro.df %>% mutate(Outcome = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 1,
+  TRUE ~ 0))
+
+
+# Get a vector of gene names
+genes <- colnames(tc.pro.df[, 4:82])
+fixed.genes <- make.names(colnames(tc.pro.df[, 4:82]))
+
+#renaming columns to ones that don't produce an error
+fixed.tc.pro.df <- tc.pro.df %>% 
+  rename_with(~ fixed.genes[which((genes) == .x)], .cols = any_of(genes))
+
+#create data frame to store the output 
+
+logr_pro_metastatic <- (data.frame(gene = genes,
+                   estimate = NA,
+                   p.value = NA))
+
+
+geneoutcome <- fixed.tc.pro.df %>%
+  select(-Sample, -Reason.for.discontinuation) 
+
+
+
+#might have a - sign. Will put to console, might want to assign it
+
+
+for (g in 1:length(fixed.genes)) {
+  f <- as.formula(paste0("Outcome ~ ",fixed.genes[g]))
+   tmp <- glm(formula = f, data = geneoutcome, family = binomial)
+   tmpdf <- broom::tidy(tmp)
+#  retrieve the line of interest with g, estimate, and p-value
+   logr_pro_metastatic$estimate[g] <- tmpdf$estimate[2]
+   logr_pro_metastatic$p.value[g] <- tmpdf$p.value[2]
+ 
+}
+logr_pro_metastatic <- logr_pro_metastatic %>%
+   mutate(FDR = p.adjust(p.value)) %>%
+   arrange(FDR) 
+
+labeled_data <- logr_pro_metastatic %>%
+  filter(gene == "IL-4")
+```
+
+
+```{r}
+logr_pro_metastatic_graph <- ggplot(data = logr_pro_metastatic, aes(x = estimate, y = p.value)) +
+            geom_point(color = "black") +
+  scale_y_reverse() +
+  geom_point(
+    data = labeled_data,
+    color = "red",) +
+# geom_text_repel(
+#     data = labeled_data,
+#     aes(label = NULL),
+#     # nudge_x = 0.1, 
+#     # nudge_y = -0.1) + 
+# ) +
+  ylab("p-value") +
+  xlab("log(OR)") +
+    theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 24, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 24, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 20),  
+    # plot.title = element_text(size = 18, face = "bold")
+  ) 
+
+  
+
+print(logr_pro_metastatic_graph)
+
+save(logr_pro_metastatic, file = "../Outputs/logr_pro_metastatic.Rdata")
+
+
+```

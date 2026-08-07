@@ -1,0 +1,203 @@
+---
+title: "svm_tox_for_osc"
+author: "Noah Lepola"
+date: "2025-01-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(e1071)
+library(caret)
+library(PRROC)
+
+```
+
+
+Loading files
+```{r}
+load(file = "../Outputs/xgb.char")
+load(file = "../Outputs/pt.status_no_ipi")
+load(file = "../Outputs/gene.exp")
+```
+
+
+```{r}
+source("../svm_functions.R")
+```
+
+
+joining everything to run in svm
+```{r}
+status.char <- left_join(pt.status, xgb.char)
+status.char.exp <- left_join(status.char, gene.exp)
+
+
+```
+
+splitting into testing and training for therapy complete or toxicity
+Removing StageI because svm can't handle all 0
+```{r}
+train <- filter(status.char.exp, 
+                Cohort == "Adj", 
+                Reason.for.discontinuation == "Therapy complete" | 
+                  Reason.for.discontinuation == "Toxicity") %>%
+  select(`Reason.for.discontinuation`,
+                                # TNFRSF18,
+                                # VTCN1,
+                                # CCR4,
+                                # AHR,
+                                # TIGIT
+         ADORA2A:YWHAZ
+         )
+
+test <- filter(status.char.exp, 
+               Cohort == "Adj Validation",
+                Reason.for.discontinuation == "Therapy complete" | 
+                  Reason.for.discontinuation == "Toxicity") %>%
+  select(`Reason.for.discontinuation`,
+                                # TNFRSF18,
+                                # VTCN1,
+                                # CCR4,
+                                # AHR,
+                                # TIGIT
+         ADORA2A:YWHAZ
+         )
+# svm_tox[is.na(svm_tox)] <- 0
+```
+
+
+
+Converting to factor for use in svm
+```{r}
+train$Reason.for.discontinuation <- as.factor(train$Reason.for.discontinuation)
+test$Reason.for.discontinuation <- as.factor(test$Reason.for.discontinuation)
+
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+    svm_tox <- data.frame(run = 1:length(seed_list),
+                             F1 = NA)
+
+```
+
+
+```{r}
+for (i in 1:length(seed_list)) {
+set.seed(seed_list[i])
+train.model <- svm(`Reason.for.discontinuation` ~ ., 
+                   data = train, 
+                   probability = TRUE,
+                   type = "C"
+                   )
+
+test.model <- predict(train.model, 
+                      test, 
+                      probability = TRUE, 
+                      type = "C"
+                      )
+
+test.model.df <- data.frame(test.model)
+
+test.cm <- confusionMatrix(test$Reason.for.discontinuation, 
+                test.model.df$test.model, 
+                positive = "Toxicity")
+# print(test.cm)
+svm_tox$F1[i] <- test.cm[[4]][7]
+}
+```
+
+
+Making a plot
+```{r}
+# y <- as.data.frame(aucpr$curve)
+# ggplot(y, aes(V1, V2))+geom_path()+ylim(0,1)
+```
+
+```{r}
+run_number <- 1:1000
+seed_list_random <- c(12345:13344)
+svm_tox_random_f1 <- data.frame(run = run_number, F1 = NA)
+svm_tox_random <- data.frame(run = 1:length(seed_list),
+                                F1 = NA)
+
+
+```
+
+
+```{r}
+# svm_random <- function(output){
+for (j in 1:length(seed_list_random)) {
+  
+set.seed(seed_list_random[j])
+
+train$Reason.for.discontinuation <-
+  (sample(train$Reason.for.discontinuation))
+
+test$Reason.for.discontinuation <-
+  (sample(test$Reason.for.discontinuation))
+
+for (i in 1:length(seed_list)) {
+  
+train.model <- svm(`Reason.for.discontinuation` ~ ., 
+                   data = train, 
+                   probability = TRUE,
+                   type = "C" 
+                   )
+
+test.model <- predict(train.model, 
+                      test, 
+                      probability = TRUE, 
+                      type = "C" 
+                      )
+
+test.model.df <- data.frame(test.model)
+
+randomoutput <- confusionMatrix(test$Reason.for.discontinuation, 
+                test.model.df$test.model, 
+                positive = "Toxicity")
+
+
+
+svm_tox_random[i, 2] <- randomoutput[[4]][7]
+svm_tox_random[is.na(svm_tox_random)] <- 0
+}
+svm_tox_random_f1$F1[j] <- mean(svm_tox_random$F1)
+}
+# }
+
+# svm_tox_random_f1 <- svm_random(svm_tox_random_f1)
+# write_csv(svm_tox_random_f1, file = "svm_tox_random_f1")
+```
+
+```{r}
+svm_tox$F1[is.na(svm_tox$F1)] <- 0
+
+svm_tox_f1_avg <- mean(svm_tox$F1)
+
+svm_tox_perc <- p.calc(svm_tox_f1_avg, svm_tox_random_f1$F1)
+```
+
+
+```{r}
+cat(svm_tox$F1, sep = "\n")
+
+```
+
+
+```{r}
+metrics_plot <- ggplot(data = svm_tox_random_f1, aes(x = F1)) + 
+  geom_density() +
+  geom_vline(xintercept = svm_tox_f1_avg, color = "red")
+
+print(metrics_plot)
+
+```
+
+
+
+

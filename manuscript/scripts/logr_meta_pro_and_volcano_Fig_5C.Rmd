@@ -1,0 +1,120 @@
+---
+title: "logr meta pro and volcano Fig 5C"
+author: "Noah Lepola"
+date: "2024-06-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(broom)
+library(ggrepel)
+
+```
+
+Loading file
+```{r}
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+```
+
+Splitting by cohort and outcome
+```{r}
+tc.pro.outcomes <- filter(met_outcomes, Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+tc.pro.data <- filter(met_data, (Sample %in% tc.pro.outcomes$Sample))
+```
+
+
+```{r}
+#renaming column and merging 
+tc.pro.df <- left_join(tc.pro.outcomes, tc.pro.data, by = c("Sample" = "Sample" ))
+#adding numbers for outcome
+tc.pro.df <- tc.pro.df %>% mutate(Outcome = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 1,
+  TRUE ~ 0))
+
+
+# Get a vector of gene names
+genes <- colnames(tc.pro.df[, 4:82])
+fixed.genes <- make.names(colnames(tc.pro.df[, 4:82]))
+
+#renaming columns to ones that don't produce an error
+fixed.tc.pro.df <- tc.pro.df %>% 
+  rename_with(~ fixed.genes[which((genes) == .x)], .cols = any_of(genes))
+
+#create data frame to store the output 
+
+logr_pro_metastatic <- (data.frame(gene = genes,
+                   estimate = NA,
+                   p.value = NA))
+
+
+geneoutcome <- fixed.tc.pro.df %>%
+  select(-Sample, -Reason.for.discontinuation) 
+
+
+
+
+
+for (g in 1:length(fixed.genes)) {
+  f <- as.formula(paste0("Outcome ~ ",fixed.genes[g]))
+   tmp <- glm(formula = f, data = geneoutcome, family = binomial)
+   tmpdf <- broom::tidy(tmp)
+#  retrieve the line of interest with g, estimate, and p-value
+   logr_pro_metastatic$estimate[g] <- tmpdf$estimate[2]
+   logr_pro_metastatic$p.value[g] <- tmpdf$p.value[2]
+ 
+}
+write.csv(logr_pro_metastatic, "../Outputs/logr_meta_pro.csv", row.names = FALSE)
+save(logr_pro_metastatic, file = "../Outputs/logr_pro_metastatic.Rdata")
+
+
+logr_pro_metastatic <- logr_pro_metastatic %>%
+   mutate(neg.log = -log10(p.value)) 
+
+
+labeled_data <- logr_pro_metastatic %>%
+  filter(gene == "IL-4")
+boruta_data <- logr_pro_metastatic %>%
+  filter(gene == "PTPRC_3") 
+
+logr_pro_metastatic <- logr_pro_metastatic %>% anti_join(labeled_data)
+logr_pro_metastatic <- logr_pro_metastatic %>% anti_join(boruta_data)
+```
+
+#Fig 5C plot
+```{r}
+logr_pro_metastatic_graph <- ggplot(data = logr_pro_metastatic, aes(x = estimate, y = neg.log)) +
+            geom_point(color = "grey42", size = 4) +
+  geom_point(
+    data = labeled_data,
+    color = "black",
+    shape = 2, 
+    size = 4, 
+    stroke = 2) +
+  geom_point(
+    data = boruta_data,
+    color = "black",
+    shape = 0, 
+    size = 4, 
+    stroke = 2) +
+  ylab(NULL) +
+  xlab(NULL) +
+    theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 16, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 16, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 18),  
+  ) 
+
+  
+
+print(logr_pro_metastatic_graph)
+
+ggsave("../figures/ProMetVol.png", height = 6, width = 11)
+
+
+```

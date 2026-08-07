@@ -1,0 +1,134 @@
+---
+title: "Adjuvant timeline"
+author: "Noah Lepola"
+date: "2025-11-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(ggrepel)
+```
+
+
+```{r}
+pt_timeline <-  readRDS(file = "../Outputs/pt_timeline.RData")
+```
+
+
+```{r}
+study_timeline <- pt_timeline %>%
+  filter(Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression" | Reason.for.discontinuation == "Toxicity") %>%
+  arrange(Duration)
+
+#Limit duration to 52 weeks
+study_timeline <- study_timeline %>%
+  mutate(
+    Duration = pmin(Duration, 52)
+  ) %>% 
+  mutate(Sample = as.factor(seq_along(Sample)))
+
+
+study_timeline <- study_timeline %>%
+  mutate(
+    Duration = as.numeric(Duration),
+    Start = 0
+  )
+
+timeline <- study_timeline %>%
+  pivot_longer(
+    cols = c(Start, Duration), 
+    values_to = "Treatment" 
+  ) %>%
+  select(
+    Sample, 
+    Reason.for.discontinuation, 
+    Treatment, 
+    Cohort
+  ) %>%
+  mutate(Reason.for.discontinuation = recode(Reason.for.discontinuation, "Progression" = "Recurrence"))
+
+#converting outcomes to factors
+timeline$Reason.for.discontinuation <-factor(timeline$Reason.for.discontinuation, 
+                                             levels = c("Recurrence",
+                                                        "Toxicity",
+                                                        "Therapy complete"
+                                                        ))
+#Splitting cohorts
+exploratory_timeline <- timeline %>%
+  filter(Cohort == "Adj")
+
+validation_timeline <- timeline %>%
+  filter(Cohort == "Adj Validation")
+
+
+```
+
+
+
+
+```{r}
+cols <- c("Therapy complete" = "black",
+          "Recurrence" = "red3",
+          "Toxicity" = "darkgreen")
+
+
+
+exploratory_timeline %>%
+  ggplot() + 
+  geom_line(aes(x = Treatment, y =Sample, col=Reason.for.discontinuation), size=1.5) +
+  theme_bw() +
+  facet_grid(rows = vars(Reason.for.discontinuation), scales = "free_y", space = "free_y") +
+  scale_color_manual(values = cols, name = NULL) +
+  # guides(color = guide_legend()) +
+  theme(legend.position = "none",  
+        strip.text.y = element_text(size = 14, face = "bold"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = 20, face = "bold", margin = ggplot2::margin(t = 10)),
+        axis.title.y = element_text(size = 20, face = "bold", margin = ggplot2::margin(r = 10)), 
+        axis.text = element_text(size = 16, color = "black")  
+        ) +
+  xlab("Duration of therapy (weeks)") +
+  ylab("Patients") 
+
+# version with no limits
+ggsave("../Outputs/exploratory_timeline.png", width = 5, height = 7)
+
+```
+
+
+
+
+```{r}
+cols <- c("Therapy complete" = "black",
+          "Recurrence" = "red3",
+          "Toxicity" = "darkgreen")
+
+
+
+validation_timeline %>%
+  ggplot() + 
+  geom_line(aes(x = Treatment, y =Sample, col=Reason.for.discontinuation), size=1.5) +
+  theme_bw() +
+  facet_grid(rows = vars(Reason.for.discontinuation), scales = "free_y", space = "free_y") +
+  scale_color_manual(values = cols, name = NULL) +
+  # guides(color = guide_legend()) +
+  theme(legend.position = "none",  
+        strip.text.y = element_text(size = 14, face = "bold"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = 20, face = "bold", margin = ggplot2::margin(t = 10)),
+        axis.title.y = element_text(size = 20, face = "bold", margin = ggplot2::margin(r = 10)), 
+        axis.text = element_text(size = 16, color = "black")  
+        ) +
+  xlab("Duration of therapy (weeks)") + 
+  ylab("Patients")
+
+# version with no limits
+ggsave("../Outputs/validation_timeline.png", width = 5, height = 7)
+
+```
+

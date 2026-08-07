@@ -1,0 +1,53 @@
+---
+title: "cor_matrix"
+author: "Noah Lepola"
+date: "2026-03-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Hmisc)
+library(tidyverse)
+
+```
+
+```{r}
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData") %>%
+  select(ADORA2A:YWHAZ)
+```
+
+
+```{r}
+met_transpose <- as.data.frame(t(met_data))
+# met_genes <- met_transpose[,-1]
+# rownames(met_genes, )<- met_transpose[,1]
+```
+
+
+```{r}
+# Calculate dissimilarity matrix
+distance <- dist(met_transpose, method = "euclidean")
+
+# Perform hierarchical clustering
+cluster <- hclust(distance, method = "complete")
+
+
+png(file="testcluster.png", width=1200, height=700)
+
+plot(as.dendrogram(cluster), main = "complete")
+
+dev.off()
+```
+
+
+
+```{r}
+options(digits = 7)
+#create matrix of correlation coefficients and p-values
+matrix <-rcorr(as.matrix(met_data), type=c("spearman"))
+corvalues <- as.data.frame(matrix[3])
+```
+
+
+

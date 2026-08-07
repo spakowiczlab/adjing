@@ -1,0 +1,288 @@
+---
+title: "auto F1 opt"
+author: "Noah Lepola"
+date: "2025-03-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(dplyr)
+library(caret)
+```
+
+Loading file
+```{r}
+
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status_no_ipi")
+load(file = "../Outputs/logr_tox_noipi.Rdata")
+load(file = "../Outputs/logr_pro_noipi.Rdata")
+source("../rf_functions.R")
+
+
+
+# load(file = "../Outputs/logr_pro_noipi_no_ipi")
+# load(file = "../Outputs/logr_tox_noipi_no_ipi")
+# load(file = "../Outputs/rec_split_chr_adj_no_ipi")
+# load(file = "../Outputs/tox_split_chr_adj_no_ipi")
+# load(file = "../Outputs/logr_pro_noipi")
+# load(file = "../Outputs/logr_tox_noipi")
+# load(file = "../Outputs/pt.status")
+# load(file = "../Outputs/rec_split_chr_adj")
+# load(file = "../Outputs/tox_split_chr_adj")
+
+```
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+
+
+
+
+
+#note this section is for rec no ipi
+```{r}
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete",
+                          "Progression")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(pt.status,
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Progression")
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+ordered_rec <- logr_pro_noipi$gene[order(logr_pro_noipi$p.value)]
+
+rec_list <- c("Sample", ordered_rec)
+
+train.seq <- train.seq %>% select(rec_list)
+test.seq <- test.seq %>% select(rec_list)
+
+
+
+# top.c <- pt.char %>% select(Sample, Therapy, `BMI (kg/m2)`, `Platelets (K/uL)`,
+#                             `LDH (U/L)`, Stage, Age)
+# train.seq <- left_join(train.seq, top.c)
+# test.seq <- left_join(test.seq, top.c)
+
+
+```
+
+#rec F1 auto opt
+```{r}
+opt_F1_rec <- data.frame(genes = 79:1, Avg.F1 = NA)
+
+for (i in 1:79) {
+rf_rec_top_char <- kTest(seed_list, "Therapy complete", "Progression", "Opt") 
+
+    temp_conmat2 <- data.frame(run = 1:25,
+                             F1 = NA)
+
+  for (j in 1:25) {
+    temp_conmat <- confusionMatrix(rf_rec_top_char[[j]][[1]][[3]],
+                                   positive = "Progression")
+    temp_conmat2$F1[j] <- temp_conmat[[4]][7]
+    
+  }
+avg <- mean(temp_conmat2$F1)
+
+
+opt_F1_rec$Avg.F1[i] <- avg
+x = length(train.seq)
+train.seq <- train.seq[-x]
+test.seq <- test.seq[-x]
+
+Sys.sleep(1)
+}
+
+save(opt_F1_rec, file = "../Outputs/opt_F1_rec.Rdata")
+
+rec_bestmodel_list <- ordered_rec[1:2]
+
+save(rec_bestmodel_list, file = "../Outputs/rec_bestmodel_list.Rdata")
+
+
+```
+
+
+#rec graph
+```{r}
+
+load(file = "../Outputs/opt_F1_rec.Rdata")
+
+ten_rec <- opt_F1_rec %>%
+  filter(genes <=10)
+
+rec_gene_number <- 1:nrow(ten_rec)
+
+F1_plot <-ggplot(data = ten_rec, mapping=aes(x = -genes, y = Avg.F1, fill = Avg.F1))+
+    scale_y_continuous(limits = c(0, 1)) +
+    scale_x_continuous(n.breaks=10, labels = abs) +
+    geom_bar(stat = "identity") +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    coord_flip() +
+    xlab("Number of Genes") +
+    ylab("Recurrence Model Performance (Avg F1)") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 24, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 24, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 20),  
+    legend.title = element_text(size=20), 
+    legend.text = element_text(size=15)
+    # plot.title = element_text(size = 18, face = "bold")
+  )  
+
+   
+
+# ggplot(df,aes(x,y,fill=y))+geom_bar(stat="identity")+scale_fill_gradient(low="blue",high="red")
+print(F1_plot)
+
+```
+
+
+#note this section is for tox no ipi
+```{r}
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete",
+                          "Toxicity")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(pt.status,
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Toxicity")
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+ordered_tox <- logr_tox_noipi$gene[order(logr_tox_noipi$p.value)]
+
+tox_list <- c("Sample", ordered_tox)
+
+train.seq <- train.seq %>% select(tox_list)
+test.seq <- test.seq %>% select(tox_list)
+
+
+
+
+
+# top.c <- pt.char %>% select(Sample, Therapy, `BMI (kg/m2)`, `Platelets (K/uL)`,
+#                             `LDH (U/L)`, Stage, Age)
+# train.seq <- left_join(train.seq, top.c)
+# test.seq <- left_join(test.seq, top.c)
+
+
+```
+
+
+#tox F1 auto opt 
+```{r}
+
+opt_F1_tox <- data.frame(genes = 79:1, Avg.F1 = NA)
+
+for (i in 1:79) {
+rf_rec_top_char <- kTest(seed_list, "Therapy complete", "Toxicity", "Opt") 
+
+    temp_conmat2 <- data.frame(run = 1:25,
+                             F1 = NA)
+
+  for (j in 1:25) {
+    temp_conmat <- confusionMatrix(rf_rec_top_char[[j]][[1]][[3]],
+                                   positive = "Toxicity")
+    temp_conmat2$F1[j] <- temp_conmat[[4]][7]
+    
+  }
+avg <- mean(temp_conmat2$F1)
+
+opt_F1_tox$Avg.F1[i] <- avg
+x = length(train.seq)
+train.seq <- train.seq[-x]
+test.seq <- test.seq[-x]
+
+print(i)
+print(avg)
+
+Sys.sleep(1)
+}
+
+save(opt_F1_tox, file = "../Outputs/opt_F1_tox.Rdata")
+
+toxadj_bestmodel_list <- ordered_tox[1:35]
+
+save(toxadj_bestmodel_list, file = "../Outputs/toxadj_bestmodel_list.Rdata")
+
+
+```
+
+
+#tox graph
+```{r}
+
+load(file = "../Outputs/opt_F1_tox.Rdata")
+
+ten_tox <- opt_F1_tox %>%
+  filter(genes <=10)
+
+F1_plot <-ggplot(data = ten_tox, mapping=aes(x = -genes, y = Avg.F1, fill = Avg.F1))+
+    scale_y_continuous(limits = c(0, 1)) +
+    scale_x_continuous(n.breaks=10, labels = abs) +
+    geom_bar(stat = "identity") +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    coord_flip() +
+    xlab("Number of Genes") +
+    ylab("Toxicity Model Performance (Avg F1)") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 24, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 24, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 20),  
+    legend.title = element_text(size=20), 
+    legend.text = element_text(size=15)
+    # plot.title = element_text(size = 18, face = "bold")
+  )  
+  
+   
+#x = reorder(genes, Avg.AUCPR) 
+# ggplot(df,aes(x,y,fill=y))+geom_bar(stat="identity")+scale_fill_gradient(low="blue",high="red")
+print(F1_plot)
+# ggsave("../figures/responsemodelperformance.png", height = 4, width = 7)
+
+```

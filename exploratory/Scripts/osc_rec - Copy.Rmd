@@ -1,0 +1,173 @@
+---
+title: "aucpr_and_cfm_template"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+```
+
+Loading file
+```{r}
+
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status_no_ipi")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions_old_old.R")
+```
+
+Splitting the cohorts into the 
+```{r}
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete", 
+                          "Progression")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(pt.status, 
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Progression") 
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+```
+
+```{r}
+train.outcomes <-
+  train.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+test.outcomes <-
+  test.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+rf_rec_noipi <- kTest(seed_list, "Therapy complete", "Progression") 
+
+aucprs <- grabVals(aucprs, rf_rec_noipi, seed_list)
+
+aucprs_avg <- mean(aucprs$AUCPR)
+aucprs_avg
+
+aucprs_max <- max(aucprs$AUCPR)
+aucprs_max
+
+
+p_values <- fishing(p_values, rf_rec_noipi, seed_list)
+
+p_values_avg <- mean(p_values$p.value)
+p_values_avg
+
+p_values_min <- min(p_values$p.value)
+p_values_min
+
+
+# saveRDS(rf_rec_noipi, file = "../Outputs/rf_rec_noipi.RData")
+
+
+
+```
+
+
+Creating objects for runs, including making a new longer seed list for use in shuffling
+```{r}
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+rf_rec_noipi_random_25000 <- list()
+```
+
+
+
+```{r}
+for (j in 1:length(run_number)) {
+  set.seed(seed_list_r[j])
+
+    train.outcomes$Reason.for.discontinuation<-
+    (sample(train.outcomes$Reason.for.discontinuation))
+
+  test.outcomes$Reason.for.discontinuation<-
+    (sample(test.outcomes$Reason.for.discontinuation))
+
+  rf_random <- kTest(seed_list, "Therapy complete", "Progression")
+
+  rf_rec_noipi_random_25000 <- append(rf_rec_noipi_random_25000, rf_random)
+
+  aucprs_random <- grabVals(aucprs_random, rf_random, seed_list)
+  
+
+    Sys.sleep(1)
+
+}
+```
+
+
+```{r}
+
+# saveRDS(rf_rec_noipi_random_1000, file = "../Outputs/rf_rec_noipi_random_1000.RData")
+# saveRDS(rf_rec_noipi_random_25000, file = "../Outputs/rf_rec_noipi_random_25000.RData")
+
+```
+
+
+```{r}
+rf_rec_noipi_clinical <- readRDS(file = "../Outputs/rf_rec_noipi_clinical.RData")
+rf_rec_noipi_clinical_random_25000 <- readRDS(file = "../Outputs/rf_rec_noipi_clinical_random_25000.RData")
+
+
+
+rec.allgenes <- met.p.calc(rf_rec_noipi_random_25000,
+                        "Progression",
+                       rec.allgenes,
+                       rf_rec_noipi)
+
+```
+
+
+```{r}
+rf_rec_noipi_verify <- readRDS(file = "../Outputs/rf_rec_noipi_verify.RData")
+rf_rec_noipi_random_25000_verify <- readRDS(file = "../Outputs/rf_rec_noipi_random_25000_verify.RData")
+
+
+
+rec.allgenes <- met.p.calc(rf_rec_noipi_random_25000,
+                        "Progression",
+                       rec.allgenes,
+                       rf_rec_noipi)
+
+```
+

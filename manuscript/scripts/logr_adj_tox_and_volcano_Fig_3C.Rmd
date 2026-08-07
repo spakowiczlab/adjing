@@ -1,0 +1,121 @@
+---
+title: "logr adj tox and volcano Fig 3C"
+author: "Noah Lepola"
+date: "2024-06-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(broom)
+
+
+```
+
+Loading file
+```{r}
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+
+```
+Splitting by cohort and outcome
+```{r}
+tc.tox.outcomes <- filter(pt_status, Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Toxicity")
+tc.tox.data <- filter(gene_exp, (Sample %in% tc.tox.outcomes$Sample))
+```
+
+```{r}
+#renaming column and merging 
+tc.tox.df <- left_join(tc.tox.outcomes, tc.tox.data, by = c("Sample" = "Sample" ))
+#adding numbers for outcome
+tc.tox.df <- tc.tox.df %>% mutate(Outcome = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 1,
+  TRUE ~ 0))
+
+
+# Get a vector of gene names
+genes <- colnames(tc.tox.df[, 4:82])
+fixed.genes <- make.names(colnames(tc.tox.df[, 4:82]))
+
+#renaming columns to ones that don't produce an error
+fixed.tc.tox.df <- tc.tox.df %>% 
+  rename_with(~ fixed.genes[which((genes) == .x)], .cols = any_of(genes))
+
+#create data frame to store the output 
+logr_tox_noipi <- (data.frame(gene = genes,
+                   estimate = NA,
+                   p.value = NA))
+
+
+geneoutcome <- fixed.tc.tox.df %>%
+  select(-Sample, -Reason.for.discontinuation) 
+
+
+
+for (g in 1:length(fixed.genes)) {
+  f <- as.formula(paste0("Outcome ~ ",fixed.genes[g]))
+   tmp <- glm(formula = f, data = geneoutcome, family = binomial)
+   tmpdf <- broom::tidy(tmp)
+#  retrieve the line of interest with g, estimate, and p-value
+   logr_tox_noipi$estimate[g] <- tmpdf$estimate[2]
+   logr_tox_noipi$p.value[g] <- tmpdf$p.value[2]
+ 
+}
+write.csv(logr_tox_noipi, "../Outputs/logr_adj_tox.csv", row.names = FALSE)
+save(logr_tox_noipi, file = "logr_tox_noipi.Rdata")
+
+logr_tox_noipi <- logr_tox_noipi %>%
+   mutate(neg.log = -log10(p.value)) 
+
+
+labeled_data <- logr_tox_noipi %>%
+  filter(gene == "TNFRSF18" |
+           gene == "VTCN1" |
+           gene == "CCR4" |
+           gene == "AHR" |
+           gene == "TIGIT")
+
+boruta_data <- logr_tox_noipi %>%
+  filter(gene == "TNF" |
+           gene == "PDCD1LG2")
+
+
+logr_tox_noipi <- logr_tox_noipi %>% anti_join(labeled_data)
+logr_tox_noipi <- logr_tox_noipi %>% anti_join(boruta_data)
+
+
+```
+
+#Fig 3C plot
+```{r}
+logr_tox_noipi_graph <- ggplot(data = logr_tox_noipi, aes(x = estimate, y = neg.log)) +
+            geom_point(color = "grey42", size = 4) +
+  geom_point(
+    data = labeled_data,
+    color = "black",
+    shape = 2, 
+    size = 4, 
+    stroke = 2) +
+  geom_point(
+    data = boruta_data,
+    color = "black",
+    shape = 0, 
+    size = 4, 
+    stroke = 2) +
+  ylab(NULL) +
+  xlab(NULL) +
+    theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 16, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 16, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 18),  
+  ) 
+
+
+print(logr_tox_noipi_graph)
+ggsave("../figures/ToxAdjVol.png", height = 6, width = 11)
+
+```

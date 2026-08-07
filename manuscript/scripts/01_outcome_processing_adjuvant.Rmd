@@ -1,0 +1,91 @@
+---
+title: "Adj patient outcomes"
+author: "Noah Lepola"
+date: "2024-12-16"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(dplyr)
+
+```
+
+```{r}
+pt_char <- readRDS(file = "../Outputs/pt_char.RData")
+
+```
+
+
+```{r}
+#Reading in patient data
+adjing.data <- openxlsx::loadWorkbook("T:/Labs/Spakowicz/mitox/Clinical info/Patient Data 7-1-22.xlsm")
+
+
+#selecting sheet with progressed/treatment completed
+Adj_Datasheet <- readWorkbook(adjing.data, sheet = "Adj Datasheet", startRow = 2)
+
+#changing columns with the same name
+alting_names <- rename(Adj_Datasheet, Coded.Sample = 52, Drugs = 21, Date.of.treatment = 22)
+
+#removing excluded
+new_status <- subset(alting_names, Cohort != "Excluded")
+
+#making timeline object
+treatment_length_temp <- new_status %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`, Cohort, `Duration.of.treatment.for.discontinued.(weeks.from.C1D1.to.first.infusion.cancelled.d/t.discontinuation)`, `Duration.of.treatment.for.ongoing.(weeks.from.C1D1.to.most.recent.dose)`)
+
+#calculating treatment length
+treatment_length <- treatment_length_temp %>% 
+  mutate(Duration = coalesce(`Duration.of.treatment.for.discontinued.(weeks.from.C1D1.to.first.infusion.cancelled.d/t.discontinuation)`, `Duration.of.treatment.for.ongoing.(weeks.from.C1D1.to.most.recent.dose)`)) %>%
+         select(`Coded.Sample.#`, `Reason.for.discontinuation`, Cohort, Duration)
+
+
+#creating data frames with only important information
+status <- treatment_length %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`, Cohort, Duration)
+
+
+#adjusting names to match
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\) *", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <- gsub( " *\\(.*?\\)*", "", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("- ", "-", status$`Coded.Sample.#`)
+status$`Coded.Sample.#` <-gsub("^\\s+|\\s+$", "", status$`Coded.Sample.#`)
+temp_status <- status %>% rename(Sample = `Coded.Sample.#`)
+#removing samples that aren't in nanostring
+status_cohort <- subset(temp_status, (Sample %in% pt_char$Sample)) 
+
+
+
+```
+
+```{r}
+#removing extra information and correcting spelling
+   status_cohort$Reason.for.discontinuation <- gsub( " */*Intolerance", "",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <- gsub( " */ *", "",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\)*", "",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <-gsub("- ", "-",  status_cohort$Reason.for.discontinuation)
+   status_cohort$Reason.for.discontinuation <-gsub("Toxcity", "Toxicity",  status_cohort$Reason.for.discontinuation)
+  
+  status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", status_cohort$Reason.for.discontinuation)
+  status_cohort$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", status_cohort$Reason.for.discontinuation)
+
+pt_status <- status_cohort %>%
+  select(Sample, `Reason.for.discontinuation`, Cohort)
+
+pt_timeline <- (status_cohort)%>%
+  select(Sample, `Reason.for.discontinuation`, Cohort, Duration)
+
+
+```
+
+
+```{r}
+saveRDS(pt_status, file = "../Outputs/pt_status.RData")
+saveRDS(pt_timeline, file = "../Outputs/pt_timeline.RData")
+
+```
+

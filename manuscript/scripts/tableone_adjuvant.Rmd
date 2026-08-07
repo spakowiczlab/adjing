@@ -1,0 +1,63 @@
+---
+title: "tableone adjuvant"
+author: "Noah Lepola"
+date: "2024-12-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tableone)
+library(tidyverse)
+
+```
+
+
+Loading files
+```{r}
+pt_char <-  readRDS(file = "../Outputs/pt_char.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+
+```
+
+
+#Combining everything to be used in the table
+```{r}
+pt_char_status <- full_join(pt_status, pt_char)
+
+pt_char_status <- pt_char_status %>% select(!Sample)
+```
+
+#Splitting data to be used in different outcome tables
+```{r}
+tc.tox <-filter(pt_char_status, `Reason.for.discontinuation` == 
+      "Therapy complete" | `Reason.for.discontinuation` == "Toxicity") 
+
+tc.rec <-filter(pt_char_status, `Reason.for.discontinuation` ==
+      "Therapy complete" | `Reason.for.discontinuation` == "Progression")
+```
+
+#Creating objects 
+```{r}
+vars <- c("Sex", "Reason.for.discontinuation", "Age", "BMI (kg/m2)", "Platelets (K/uL)", "LDH (U/L)",
+           "Stage", "Therapy")
+```
+
+
+#Making Table One separated by cohort
+```{r}
+pt_char_status[pt_char_status$Reason.for.discontinuation != "Therapy complete" & pt_char_status$Reason.for.discontinuation != "Toxicity" & pt_char_status$Reason.for.discontinuation != "Progression", "Reason.for.discontinuation"] <- "Other"
+
+pt_char_status[pt_char_status$Cohort == "Adj Validation", "Cohort"] <- "Validation"
+pt_char_status[pt_char_status$Cohort == "Adj", "Cohort"] <- "Exploratory"
+
+
+cohort.strat <- CreateTableOne(vars = vars, strata = "Cohort",
+                               data = pt_char_status, test = TRUE)
+cohort.strat
+
+knitr::kable(print(cohort.strat, showAllLevels = TRUE))
+```
+
+

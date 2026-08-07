@@ -1,0 +1,126 @@
+---
+title: "logr adj rec and volcano Fig 2E"
+author: "Noah Lepola"
+date: "2024-06-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(openxlsx)
+library(broom)
+library(ggrepel)
+
+```
+
+Loading file
+```{r}
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+```
+Splitting by cohort and outcome
+```{r}
+tc.pro.outcomes <- filter(pt_status, Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+tc.pro.data <- filter(gene_exp, (Sample %in% tc.pro.outcomes$Sample))
+```
+
+```{r}
+#renaming column and merging 
+tc.pro.df <- left_join(tc.pro.outcomes, tc.pro.data, by = c("Sample" = "Sample" ))
+#adding numbers for outcome
+tc.pro.df <- tc.pro.df %>% mutate(Outcome = case_when(
+  Reason.for.discontinuation == "Therapy complete" ~ 1,
+  TRUE ~ 0))
+
+
+# Get a vector of gene names
+genes <- colnames(tc.pro.df[, 4:82])
+fixed.genes <- make.names(colnames(tc.pro.df[, 4:82]))
+
+#renaming columns to ones that don't produce an error
+fixed.tc.pro.df <- tc.pro.df %>% 
+  rename_with(~ fixed.genes[which((genes) == .x)], .cols = any_of(genes))
+
+#create data frame to store the output 
+
+logr_pro_noipi <- (data.frame(gene = genes,
+                   estimate = NA,
+                   p.value = NA))
+
+
+geneoutcome <- fixed.tc.pro.df %>%
+  select(-Sample, -Reason.for.discontinuation) 
+
+
+
+
+
+for (g in 1:length(fixed.genes)) {
+  f <- as.formula(paste0("Outcome ~ ",fixed.genes[g]))
+   tmp <- glm(formula = f, data = geneoutcome, family = binomial)
+   tmpdf <- broom::tidy(tmp)
+#  retrieve the line of interest with g, estimate, and p-value
+   logr_pro_noipi$estimate[g] <- tmpdf$estimate[2]
+   logr_pro_noipi$p.value[g] <- tmpdf$p.value[2]
+ 
+}
+write.csv(logr_pro_noipi, "../Outputs/logr_adj_rec.csv", row.names = FALSE)
+save(logr_pro_noipi, file = "../Outputs/logr_pro_noipi.Rdata")
+
+
+logr_pro_noipi <- logr_pro_noipi %>%
+   mutate(neg.log = -log10(p.value)) 
+
+labeled_data <- logr_pro_noipi %>%
+  filter(gene == "CD160" | gene == "GZMB")
+boruta_data <- logr_pro_noipi %>%
+  filter(gene == "AHR" | 
+           gene == "HAVCR2" |
+           gene == "ZBTB7B" |
+           gene == "PVRIG" |
+           gene == "CDKN2A (ARF)" |
+           gene == "CD4" |
+           gene == "FOXP3" 
+           )
+
+logr_pro_noipi <- logr_pro_noipi %>% anti_join(labeled_data)
+logr_pro_noipi <- logr_pro_noipi %>% anti_join(boruta_data)
+
+```
+
+#Fig 2E plot
+```{r}
+logr_pro_noipi_graph <- ggplot(data = logr_pro_noipi, aes(x = estimate, y = neg.log)) +
+            geom_point(color = "grey42", size = 4) +
+  geom_point(
+    data = labeled_data,
+    color = "black",
+    shape = 2, 
+    size = 4, 
+    stroke = 2) +
+  geom_point(
+    data = boruta_data,
+    color = "black",
+    shape = 0, 
+    size = 4, 
+    stroke = 2) +
+  ylab(NULL) +
+  xlab(NULL) +
+    theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 16, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 16, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 18),  
+  ) 
+
+  
+
+print(logr_pro_noipi_graph)
+
+ggsave("../figures/RecAdjVol.png", height = 6, width = 11)
+
+
+
+```

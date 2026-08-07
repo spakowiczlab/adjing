@@ -1,0 +1,270 @@
+---
+title: "adj tox Fig 3ABE"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(caret)
+
+```
+
+Loading file
+```{r}
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+pt_char <-  readRDS(file = "../Outputs/pt_char.RData")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+#Creating objects for runs
+```{r}
+full_list <- colnames(gene_exp)[2:length(gene_exp)]
+clin_list <- colnames(pt_char)[2:length(pt_char)]
+bor_list <- c("TNF", "PDCD1LG2")
+logr_list <- c("TNFRSF18", "VTCN1", "CCR4", "AHR", "TIGIT")
+#Unshuffled 
+seed_list <- c(12345:12369)
+#Shuffled
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+```
+
+
+
+#Adj tox clinical
+```{r}
+#running predictive model
+rf_tox_clinical <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     pt_status,
+                     pt_char,
+                     "Adj",
+                     "Adj Validation",
+                     clin_list) 
+
+
+saveRDS(rf_tox_clinical, file = "../Outputs/rf_tox_clinical.RData")
+
+rf_tox_clinical_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        pt_status,
+                                        pt_char,
+                                        "Adj",
+                                        "Adj Validation",
+                                        clin_list
+)
+
+
+
+saveRDS(rf_tox_clinical_random, file = "../Outputs/rf_tox_clinical_random.RData")
+
+
+tox.clinical <- met.p.calc(rf_tox_clinical_random,
+                        "Toxicity",
+                       rf_tox_clinical)
+
+
+metric_graph(rf_tox_clinical_random,
+             "Toxicity",
+             rf_tox_clinical)
+```
+
+
+#Adj tox full panel
+```{r}
+#running predictive model
+rf_tox_fullpanel <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj",
+                     "Adj Validation",
+                     full_list) 
+
+
+saveRDS(rf_tox_fullpanel, file = "../Outputs/rf_tox_fullpanel.RData")
+
+rf_tox_fullpanel_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        pt_status,
+                                        gene_exp,
+                                        "Adj",
+                                        "Adj Validation",
+                                        full_list
+)
+
+
+
+saveRDS(rf_tox_fullpanel_random, file = "../Outputs/rf_tox_fullpanel_random.RData")
+
+
+
+
+tox.fullpanel <- met.p.calc(rf_tox_fullpanel_random,
+                        "Toxicity",
+                       rf_tox_fullpanel)
+
+
+metric_graph(rf_tox_fullpanel_random,
+             "Toxicity",
+             rf_tox_fullpanel)
+```
+
+
+
+
+
+
+#Adj tox boruta
+```{r}
+#running predictive model
+rf_tox_boruta <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj",
+                     "Adj Validation",
+                     bor_list) 
+
+
+saveRDS(rf_tox_boruta, file = "../Outputs/rf_tox_boruta.RData")
+
+rf_tox_boruta_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        pt_status,
+                                        gene_exp,
+                                        "Adj",
+                                        "Adj Validation",
+                                        bor_list
+)
+
+
+
+saveRDS(rf_tox_boruta_random, file = "../Outputs/rf_tox_boruta_random.RData")
+
+
+
+tox.boruta <- met.p.calc(rf_tox_boruta_random,
+                        "Toxicity",
+                       rf_tox_boruta)
+
+
+metric_graph(rf_tox_boruta_random,
+             "Toxicity",
+             rf_tox_boruta)
+```
+
+
+#Adj tox logr
+```{r}
+#running predictive model
+rf_tox_logr <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj",
+                     "Adj Validation",
+                     logr_list) 
+
+
+saveRDS(rf_tox_logr, file = "../Outputs/rf_tox_logr.RData")
+
+rf_tox_logr_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        pt_status,
+                                        gene_exp,
+                                        "Adj",
+                                        "Adj Validation",
+                                        logr_list
+)
+
+
+
+saveRDS(rf_tox_logr_random, file = "../Outputs/rf_tox_logr_random.RData")
+
+
+
+tox.logr <- met.p.calc(rf_tox_logr_random,
+                        "Toxicity",
+                       rf_tox_logr)
+
+
+metric_graph(rf_tox_logr_random,
+             "Toxicity",
+             rf_tox_logr)
+```
+
+
+
+
+
+
+
+
+#Clinical + full panel summary Fig 3A
+```{r}
+
+
+double.graph(rf_tox_clinical_random, 
+              rf_tox_clinical, 
+              rf_tox_fullpanel_random, 
+              rf_tox_fullpanel, 
+              "Toxicity")
+
+ggsave("../figures/AdjToxDualGraph.png", width = 11, height = 7)
+
+
+
+```
+
+#Boruta summary graph Fig 3B
+```{r}
+
+single.graph(rf_tox_boruta_random, 
+              rf_tox_boruta,
+             "Boruta Null", 
+             "Boruta", 
+             "Toxicity")
+ggsave("../figures/AdjToxBoruta.png", width = 5.5, height = 7)
+```
+
+#Logr summary graph Fig 3E
+```{r}
+single.graph(rf_tox_logr_random, 
+              rf_tox_logr,
+             "LogR Null", 
+             "LogR", 
+             "Toxicity")
+
+ggsave("../figures/AdjToxLogr.png", width = 5.5, height = 7)
+
+
+```
+
+
+

@@ -1,0 +1,103 @@
+---
+title: "aucpr_and_cfm_template"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(Boruta)
+```
+
+Loading file
+```{r}
+load(file = "../Outputs/toxmeta_bestmodel_list.Rdata")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+met_char <-  readRDS(file = "../Outputs/met_cohort_char.RData")
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+Splitting the cohorts into the 
+```{r}
+train.outcomes <- sorting(met_outcomes,
+                          "Met Discovery",
+                          "Therapy complete",
+                          "Toxicity")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(met_outcomes,
+                        "Met Validation",
+                        "Therapy complete",
+                        "Toxicity")
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(met_data,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(met_data,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+```
+
+```{r}
+train.outcomes <-
+  train.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+test.outcomes <-
+  test.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+train.seq <- train.seq %>% select(Sample, 
+                                  toxmeta_bestmodel_list
+                                  )
+
+test.seq <- test.seq %>% select(Sample, 
+                                  toxmeta_bestmodel_list
+ )
+
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+meta_tox_boruta <- kTest(seed_list, "Therapy complete", "Toxicity", "Boruta") 
+
+meta_tox_borutalist <- grabImp(meta_tox_boruta, seed_list)
+
+saveRDS(meta_tox_borutalist, file = "../Outputs/meta_tox_borutalist.RData")
+
+
+
+```
+
+
+```{r}
+table(meta_tox_borutalist$.)
+```
+

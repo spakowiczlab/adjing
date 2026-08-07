@@ -1,0 +1,195 @@
+---
+title: "F1 opt adj-Fig 2F, Fig3D"
+author: "Noah Lepola"
+date: "2025-03-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(dplyr)
+library(caret)
+```
+
+Loading file
+```{r}
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+load(file = "../Outputs/logr_tox_noipi.Rdata")
+load(file = "../Outputs/logr_pro_noipi.Rdata")
+```
+
+
+```{r}
+source("../rf_functions.R")
+```
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+
+
+
+#rec F1 opt
+```{r}
+ordered_rec <- logr_pro_noipi$gene[order(logr_pro_noipi$p.value)]
+
+
+opt_F1_rec <- data.frame(genes = 79:1, Avg.F1 = NA)
+
+for (i in 1:79) {
+rf_rec_top_char <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Opt",
+                     pt_status,
+                     gene_exp,
+                     "Adj",
+                     "Adj Validation",
+                     ordered_rec) 
+
+    temp_conmat2 <- data.frame(run = 1:25,
+                             F1 = NA)
+
+  for (j in 1:25) {
+    temp_conmat <- confusionMatrix(rf_rec_top_char[[j]][[1]][[3]],
+                                   positive = "Progression")
+    temp_conmat2$F1[j] <- temp_conmat[[4]][7]
+    
+  }
+avg <- mean(temp_conmat2$F1)
+
+
+opt_F1_rec$Avg.F1[i] <- avg
+x = length(ordered_rec)
+ordered_rec <- ordered_rec[-x]
+
+}
+
+save(opt_F1_rec, file = "../Outputs/opt_F1_rec.Rdata")
+
+rec_bestmodel_list <- ordered_rec[1:2]
+
+save(rec_bestmodel_list, file = "../Outputs/rec_bestmodel_list.Rdata")
+
+
+```
+
+
+#rec graph-Fig 2F
+```{r}
+
+
+ten_rec <- opt_F1_rec %>%
+  filter(genes <=10)
+
+rec_gene_number <- 1:nrow(ten_rec)
+
+F1_plot <-ggplot(data = ten_rec, mapping=aes(x = -genes, y = Avg.F1, fill = Avg.F1))+
+    scale_y_continuous(limits = c(0, 0.6)) +
+    scale_x_continuous(n.breaks=10, labels = abs) +
+    geom_bar(stat = "identity") +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    coord_flip() +
+    xlab(NULL) +
+    ylab(NULL) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 24, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 24, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 20),  
+    legend.title = element_text(size=20), 
+    legend.text = element_text(size=15)
+  )  
+
+   
+
+print(F1_plot)
+ggsave("../figures/RecAdjOptBar.png", height = 4, width = 5)
+
+```
+
+
+
+
+#tox F1 opt 
+```{r}
+ordered_tox <- logr_tox_noipi$gene[order(logr_tox_noipi$p.value)]
+
+opt_F1_tox <- data.frame(genes = 79:1, Avg.F1 = NA)
+
+for (i in 1:79) {
+rf_tox_top_char <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Opt",
+                     pt_status,
+                     gene_exp,
+                     "Adj",
+                     "Adj Validation",
+                     ordered_tox) 
+
+
+    temp_conmat2 <- data.frame(run = 1:25,
+                             F1 = NA)
+
+  for (j in 1:25) {
+    temp_conmat <- confusionMatrix(rf_tox_top_char[[j]][[1]][[3]],
+                                   positive = "Toxicity")
+    temp_conmat2$F1[j] <- temp_conmat[[4]][7]
+    
+  }
+avg <- mean(temp_conmat2$F1)
+
+opt_F1_tox$Avg.F1[i] <- avg
+x = length(ordered_tox)
+ordered_tox <- ordered_tox[-x]
+
+
+}
+
+save(opt_F1_tox, file = "../Outputs/opt_F1_tox.Rdata")
+
+toxadj_bestmodel_list <- ordered_tox[1:35]
+
+save(toxadj_bestmodel_list, file = "../Outputs/toxadj_bestmodel_list.Rdata")
+
+
+```
+
+
+#tox graph-Fig3D
+```{r}
+
+
+ten_tox <- opt_F1_tox %>%
+  filter(genes <=10)
+
+F1_plot <-ggplot(data = ten_tox, mapping=aes(x = -genes, y = Avg.F1, fill = Avg.F1))+
+    scale_y_continuous(limits = c(0, 0.6)) +
+    scale_x_continuous(n.breaks=10, labels = abs) +
+    geom_bar(stat = "identity") +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    coord_flip() +
+    xlab(NULL) +
+    ylab(NULL) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 24, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 24, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 20),  
+    legend.title = element_text(size=20), 
+    legend.text = element_text(size=15)
+  )  
+  
+   
+print(F1_plot)
+ggsave("../figures/ToxAdjOptBar.png", height = 4, width = 5)
+
+```

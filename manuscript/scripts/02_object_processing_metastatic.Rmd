@@ -1,0 +1,133 @@
+---
+title: "metastatic objects"
+author: "Noah Lepola"
+date: "2025-04-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(openxlsx)
+
+```
+
+
+##Making clinical object and outcome object
+```{r}
+#Loading metastatic cohorts
+met_cohort <- readxl::read_xlsx("T:/Labs/Burd/CEBurd Lab/Noah Lepola/Adjuvant Melanoma Paper/Metastatic dis plus val processsing.xlsx", sheet = 1) 
+
+#Making outcomes object
+met_cohort_outcomes <- met_cohort %>%
+  select(Sample, 
+         Reason.for.discontinuation, 
+         Cohort) %>%
+  arrange(desc(Sample))
+
+#formatting therapy and stage
+IV <- c("IV")
+IIIvalues <- c("IIIC", "IIIB", "IIIA", "III")
+III <- paste(IIIvalues, collapse = "|")
+IIvalues <- c("IIC", "IIB", "IIA", "II")
+II <- paste(IIvalues, collapse = "|")
+start.stage <- met_cohort$`Stage (7th edition) prior to beginning therapy`
+
+
+met_cohort$Stage <- ifelse(grepl(III, start.stage), as.character("III"),
+                        ifelse(grepl(IV, start.stage), as.character("IV"),
+                              ifelse(grepl(II, start.stage),as.character("II"), 
+                                     as.character("I"))))
+
+#making clinical characteristics object
+met_cohort_char <- met_cohort %>%
+  select(Sample, 
+         Cohort, 
+         Age, 
+         `BMI (kg/m2)`, 
+         `LDH (U/L)`,
+         Stage,
+         Therapy,
+         Sex) %>%
+  filter(Sample %in% met_cohort_outcomes$Sample) %>%
+  filter(Therapy == "Nivolumab" | Therapy == "Pembrolizumab") %>%
+  arrange(desc(Sample))
+
+
+
+```
+
+##Gene object and limiting samples to one patients with outcome data
+```{r}
+#metastatic discovery and validation nanosting objects
+metdisdata <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 4) %>%
+  drop_na(Sample, ADORA2A) 
+
+metvaldata <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 5) %>%
+  drop_na(Sample, ADORA2A)
+
+metvaldata$Sample <-gsub(" ", "-", metvaldata$Sample)
+
+met_dis_data <- metdisdata %>%
+  select(Sample, ADORA2A:YWHAZ)
+
+met_val_data <- metvaldata %>%
+  select(Sample, ADORA2A:YWHAZ)
+
+#joining to one object
+metdata <- full_join(met_dis_data, met_val_data)
+
+met_cohort_data <- metdata %>%
+  select(Sample, ADORA2A:YWHAZ) %>%
+  filter(Sample %in% met_cohort_outcomes$Sample) %>%
+  filter(Sample %in% met_cohort_char$Sample) %>%
+  arrange(desc(Sample))
+
+saveRDS(met_cohort_data, file = "../Outputs/met_cohort_data.RData")
+
+
+
+```
+
+##limiting clinical and outcome data to ones that have gene data
+```{r}
+met_cohort_outcomes <- met_cohort_outcomes %>%
+  filter(Sample %in% met_cohort_data$Sample)
+
+saveRDS(met_cohort_outcomes, file = "../Outputs/met_cohort_outcomes.RData")
+
+
+
+met_cohort_char <- met_cohort_char %>%
+  filter(Sample %in% met_cohort_data$Sample)
+
+#censoring ages 90 or above for anonymity
+#if needed to replicate results, please contact corresponding author to
+#receive uncensored data
+
+met_cohort_char$Age[met_cohort_char$Age >= 90] <- "Censored"
+
+saveRDS(met_cohort_char, file = "../Outputs/met_cohort_char.RData")
+
+```
+
+
+#metastatic timeline 
+```{r}
+met_timeline <- met_cohort %>%
+  select(Sample, 
+         Reason.for.discontinuation, 
+         Cohort, 
+         Duration) %>%
+  filter(Reason.for.discontinuation %in% c("Toxicity", 
+                                             "Therapy complete", 
+                                             "Progression")) %>%
+  filter(Sample %in% met_cohort_data$Sample) %>%
+  arrange(desc(Sample))
+
+saveRDS(met_timeline, file = "../Outputs/met_timeline.RData")
+
+```
+
+
+

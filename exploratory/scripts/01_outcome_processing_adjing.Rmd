@@ -26,9 +26,18 @@ alting_names <- rename(Adj_Datasheet, Coded.Sample = 52, Drugs = 21, Date.of.tre
 
 new_status <- subset(alting_names, Cohort != "Excluded")
 
+treatment_length_temp <- new_status %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`, Cohort, `Duration.of.treatment.for.discontinued.(weeks.from.C1D1.to.first.infusion.cancelled.d/t.discontinuation)`, `Duration.of.treatment.for.ongoing.(weeks.from.C1D1.to.most.recent.dose)`)
+
+treatment_length <- treatment_length_temp %>% 
+  mutate(Duration = coalesce(`Duration.of.treatment.for.discontinued.(weeks.from.C1D1.to.first.infusion.cancelled.d/t.discontinuation)`,                             `Duration.of.treatment.for.ongoing.(weeks.from.C1D1.to.most.recent.dose)`)) %>%
+         select(`Coded.Sample.#`, `Reason.for.discontinuation`, Cohort, Duration)
+
+
 #creating data frames with only sample and progression
-status <- new_status %>%
-  select(`Coded.Sample.#`, `Reason.for.discontinuation`, Cohort)
+status <- treatment_length %>%
+  select(`Coded.Sample.#`, `Reason.for.discontinuation`, Cohort, Duration)
+
 
 #adjusting names to match
 status$`Coded.Sample.#` <- gsub( " *\\(.*?\\) *", "", status$`Coded.Sample.#`)
@@ -39,6 +48,7 @@ temp_status <- status %>% rename(Sample = `Coded.Sample.#`)
 #removing samples that aren't in nanostring
 load(file = "../Outputs/pt.char")
 status_cohort <- subset(temp_status, (Sample %in% pt.char$Sample)) 
+
 
 
 ```
@@ -55,12 +65,18 @@ status_cohort <- subset(temp_status, (Sample %in% pt.char$Sample))
   status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", status_cohort$Reason.for.discontinuation)
   status_cohort$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", status_cohort$Reason.for.discontinuation)
 
-pt.status <- (status_cohort)
+pt.status <- status_cohort %>%
+  select(Sample, `Reason.for.discontinuation`, Cohort)
+
+pt.timeline <- (status_cohort)%>%
+  select(Sample, `Reason.for.discontinuation`, Cohort, Duration)
+
+
 ```
 
 
 ```{r}
 save(pt.status, file = "../Outputs/pt.status")
-
+save(pt.timeline, file = "../Outputs/pt.timeline")
 ```
 

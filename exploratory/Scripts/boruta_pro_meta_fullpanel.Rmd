@@ -1,0 +1,94 @@
+---
+title: "aucpr_and_cfm_template"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(Boruta)
+```
+
+Loading file
+```{r}
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+met_char <-  readRDS(file = "../Outputs/met_cohort_char.RData")
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+Splitting the cohorts into the 
+```{r}
+train.outcomes <- sorting(met_outcomes,
+                          "Met Discovery",
+                          "Therapy complete",
+                          "Progression")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(met_outcomes,
+                        "Met Validation",
+                        "Therapy complete",
+                        "Progression")
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(met_data,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(met_data,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+```
+
+```{r}
+train.outcomes <-
+  train.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+test.outcomes <-
+  test.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+meta_pro_boruta_fullpanel <- kTest(seed_list, "Therapy complete", "Progression", "Boruta") 
+
+meta_pro_borutalist_fullpanel <- grabImp(meta_pro_boruta_fullpanel, seed_list)
+
+
+saveRDS(meta_pro_borutalist_fullpanel, file = "../Outputs/meta_pro_borutalist_fullpanel.RData")
+
+
+
+```
+
+```{r}
+table(meta_pro_borutalist_fullpanel$.)
+```

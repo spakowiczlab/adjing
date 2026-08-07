@@ -1,0 +1,201 @@
+---
+title: "F1 opt meta-Fig 5D, FigS1D"
+author: "Noah Lepola"
+date: "2025-03-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(dplyr)
+library(caret)
+
+```
+
+Loading file
+```{r}
+
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+load(file = "../Outputs/logr_tox_metastatic.Rdata")
+load(file = "../Outputs/logr_pro_metastatic.Rdata")
+source("../rf_functions.R")
+
+
+```
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+
+
+
+
+
+
+#pro F1 auto opt
+```{r}
+
+ordered_pro <- logr_pro_metastatic$gene[order(logr_pro_metastatic$p.value)]
+
+opt_meta_pro <- data.frame(genes = 79:1, Avg.F1 = NA)
+
+for (i in 1:79) {
+rf_pro <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Opt",
+                     met_outcomes,
+                     met_data,
+                     "Met Discovery",
+                     "Met Validation",
+                     ordered_pro) 
+
+    temp_conmat2 <- data.frame(run = 1:25,
+                             F1 = NA)
+
+  for (j in 1:25) {
+    temp_conmat <- confusionMatrix(rf_pro[[j]][[1]][[3]],
+                                   positive = "Progression")
+    temp_conmat2$F1[j] <- temp_conmat[[4]][7]
+    
+  }
+avg <- mean(temp_conmat2$F1)
+
+
+opt_meta_pro$Avg.F1[i] <- avg
+x = length(ordered_pro)
+ordered_pro <- ordered_pro[-x]
+
+
+}
+
+save(opt_meta_pro, file = "../Outputs/opt_meta_pro.Rdata")
+
+prometa_bestmodel_list <- ordered_pro[1:41]
+
+save(prometa_bestmodel_list, file = "../Outputs/prometa_bestmodel_list.Rdata")
+
+
+```
+
+
+#pro graph-Fig 5D
+```{r}
+
+ten_pro <- opt_meta_pro %>%
+  filter(genes <=10)
+
+pro_gene_number <- 1:nrow(ten_pro)
+
+f1_plot <-ggplot(data = ten_pro, mapping=aes(x = -genes, y = Avg.F1, fill = Avg.F1))+
+    scale_y_continuous(limits = c(0, 0.6)) +
+    scale_x_continuous(n.breaks=10, labels = abs) +
+    geom_bar(stat = "identity") +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    coord_flip() +
+    xlab(NULL) +
+    ylab(NULL) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 24, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 24, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 20),  
+    legend.title = element_text(size=20), 
+    legend.text = element_text(size=15)
+  )  
+
+   
+
+print(f1_plot)
+ggsave("../figures/ProMetOptBar.png", height = 4, width = 5)
+
+
+```
+
+
+
+
+#tox F1 auto opt 
+```{r}
+ordered_tox <- logr_tox_metastatic$gene[order(logr_tox_metastatic$p.value)]
+
+opt_meta_tox <- data.frame(genes = 79:1, Avg.F1 = NA)
+
+for (i in 1:79) {
+rf_tox <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Opt",
+                     met_outcomes,
+                     met_data,
+                     "Met Discovery",
+                     "Met Validation",
+                     ordered_tox) 
+
+    temp_conmat2 <- data.frame(run = 1:25,
+                             F1 = NA)
+
+  for (j in 1:25) {
+    temp_conmat <- confusionMatrix(rf_tox[[j]][[1]][[3]],
+                                   positive = "Toxicity")
+    temp_conmat2$F1[j] <- temp_conmat[[4]][7]
+    
+  }
+avg <- mean(temp_conmat2$F1)
+
+opt_meta_tox$Avg.F1[i] <- avg
+x = length(ordered_tox)
+ordered_tox <- ordered_tox[-x]
+
+print(i)
+print(avg)
+
+
+}
+
+save(opt_meta_tox, file = "../Outputs/opt_meta_tox.Rdata")
+
+toxmeta_bestmodel_list <- ordered_tox[1:5]
+
+save(toxmeta_bestmodel_list, file = "../Outputs/toxmeta_bestmodel_list.Rdata")
+
+
+```
+
+
+#tox graph-Fig S1D
+```{r}
+
+ten_tox <- opt_meta_tox %>%
+  filter(genes <=10)
+
+f1_plot <-ggplot(data = ten_tox, mapping=aes(x = -genes, y = Avg.F1, fill = Avg.F1))+
+    scale_y_continuous(limits = c(0, 0.8)) +
+        scale_x_continuous(n.breaks=10, labels = abs) +
+    geom_bar(stat = "identity") +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    coord_flip() +
+    xlab(NULL) +
+    ylab(NULL) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 24, face = "bold", margin = ggplot2::margin(t = 10)),
+    axis.title.y = element_text(size = 24, face = "bold", margin = ggplot2::margin(r = 10)),
+    axis.text = element_text(size = 20),  
+    legend.title = element_text(size=20), 
+    legend.text = element_text(size=15)
+  )  
+
+  
+   
+print(f1_plot)
+ggsave("../figures/ToxMetOptBar.png", height = 4, width = 5)
+
+```

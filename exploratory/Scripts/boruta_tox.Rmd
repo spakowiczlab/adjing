@@ -1,0 +1,109 @@
+---
+title: "aucpr_and_cfm_template"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(Boruta)
+
+```
+
+Loading file
+```{r}
+
+load(file = "../Outputs/toxadj_bestmodel_list.Rdata")
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status_no_ipi")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+Splitting the cohorts into the 
+```{r}
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete", 
+                          "Toxicity")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(pt.status, 
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Toxicity") 
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+```
+
+```{r}
+train.outcomes <-
+  train.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+test.outcomes <-
+  test.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+train.seq <- train.seq %>% select(Sample, 
+                                  toxadj_bestmodel_list
+                                  )
+
+test.seq <- test.seq %>% select(Sample, 
+                                  toxadj_bestmodel_list
+                                  )
+
+
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+adj_tox_boruta <- kTest(seed_list, "Therapy complete", "Toxicity", "Boruta") 
+
+
+
+adj_tox_borutalist <- grabImp(adj_tox_boruta, seed_list)
+
+saveRDS(adj_tox_borutalist, file = "../Outputs/adj_tox_borutalist.RData")
+
+
+```
+
+
+```{r}
+table(adj_tox_borutalist$.)
+```
+
+
+

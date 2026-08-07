@@ -1,0 +1,269 @@
+---
+title: "adj rec Fig 2A-DGH"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(caret)
+```
+
+Loading file
+```{r}
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+pt_char <-  readRDS(file = "../Outputs/pt_char.RData")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+#Creating objects for runs
+```{r}
+full_list <- colnames(gene_exp)[2:length(gene_exp)]
+clin_list <- colnames(pt_char)[2:length(pt_char)]
+bor_list <- c("AHR", "HAVCR2", "ZBTB7B", "PVRIG", "CDKN2A (ARF)", "CD4", "FOXP3")
+logr_list <- c("CD160", "GZMB")
+#Unshuffled 
+seed_list <- c(12345:12369)
+#Shuffled
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+
+df_new <- filter(logr_tox_noipi, gene %in% bor_list)
+```
+
+
+
+#Adj rec clinical Fig 2B
+```{r}
+#running predictive model
+rf_rec_clinical <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     pt_status,
+                     pt_char,
+                     "Adj",
+                     "Adj Validation",
+                     clin_list) 
+
+
+saveRDS(rf_rec_clinical, file = "../Outputs/rf_rec_clinical.RData")
+
+rf_rec_clinical_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        pt_status,
+                                        pt_char,
+                                        "Adj",
+                                        "Adj Validation",
+                                        clin_list
+)
+
+
+
+saveRDS(rf_rec_clinical_random, file = "../Outputs/rf_rec_clinical_random.RData")
+
+
+rec.clinical <- met.p.calc(rf_rec_clinical_random,
+                        "Progression",
+                       rf_rec_clinical)
+
+
+metric_graph(rf_rec_clinical_random,
+             "Progression",
+             rf_rec_clinical)
+ggsave("../figures/AdjRecClinical.png")
+
+```
+
+
+#Adj rec full panel Fig 2C
+```{r}
+#running predictive model
+rf_rec_fullpanel <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj",
+                     "Adj Validation",
+                     full_list) 
+
+
+saveRDS(rf_rec_fullpanel, file = "../Outputs/rf_rec_fullpanel.RData")
+
+rf_rec_fullpanel_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        pt_status,
+                                        gene_exp,
+                                        "Adj",
+                                        "Adj Validation",
+                                        full_list
+)
+
+
+
+saveRDS(rf_rec_fullpanel_random, file = "../Outputs/rf_rec_fullpanel_random.RData")
+
+
+rec.fullpanel <- met.p.calc(rf_rec_fullpanel_random,
+                        "Progression",
+                       rf_rec_fullpanel)
+
+
+metric_graph(rf_rec_fullpanel_random,
+             "Progression",
+             rf_rec_fullpanel)
+ggsave("../figures/AdjRecFullpanel.png")
+
+```
+
+
+
+
+
+
+#Adj rec boruta Fig 2D
+```{r}
+#running predictive model
+rf_rec_boruta <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj",
+                     "Adj Validation",
+                     bor_list) 
+
+
+saveRDS(rf_rec_boruta, file = "../Outputs/rf_rec_boruta.RData")
+
+rf_rec_boruta_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        pt_status,
+                                        gene_exp,
+                                        "Adj",
+                                        "Adj Validation",
+                                        bor_list
+)
+
+
+
+saveRDS(rf_rec_boruta_random, file = "../Outputs/rf_rec_boruta_random.RData")
+
+
+rec.boruta <- met.p.calc(rf_rec_boruta_random,
+                        "Progression",
+                       rf_rec_boruta)
+
+
+metric_graph(rf_rec_boruta_random,
+             "Progression",
+             rf_rec_boruta)
+ggsave("../figures/AdjRecBoruta.png")
+
+```
+
+
+#Adj rec logr Fig2A+2F
+```{r}
+
+#running predictive model
+rf_rec_logr <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj",
+                     "Adj Validation",
+                     logr_list) 
+
+
+saveRDS(rf_rec_logr, file = "../Outputs/rf_rec_logr.RData")
+
+rf_rec_logr_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        pt_status,
+                                        gene_exp,
+                                        "Adj",
+                                        "Adj Validation",
+                                        logr_list
+)
+
+
+
+saveRDS(rf_rec_logr_random, file = "../Outputs/rf_rec_logr_random.RData")
+
+
+
+
+rec.logr <- met.p.calc(rf_rec_logr_random,
+                        "Progression",
+                       rf_rec_logr)
+
+
+metric_graph(rf_rec_logr_random,
+             "Progression",
+             rf_rec_logr)
+
+ggsave("../figures/AdjRecLogr.png")
+```
+
+
+
+#loading files to generate graphs
+```{r}
+rf_rec_clinical <- readRDS(file = "../Outputs/rf_rec_clinical.RData")
+rf_rec_clinical_random <- readRDS(file = "../Outputs/rf_rec_clinical_random.RData")
+
+rf_rec_fullpanel <- readRDS(file = "../Outputs/rf_rec_fullpanel.RData")
+rf_rec_fullpanel_random <- readRDS(file = "../Outputs/rf_rec_fullpanel_random.RData")
+
+rf_rec_boruta <- readRDS(file = "../Outputs/rf_rec_boruta.RData")
+rf_rec_boruta_random <- readRDS(, file = "../Outputs/rf_rec_boruta_random.RData")
+
+rf_rec_logr <- readRDS(file = "../Outputs/rf_rec_logr.RData")
+rf_rec_logr_random <- readRDS(file = "../Outputs/rf_rec_logr_random.RData")
+
+
+```
+
+
+
+#Model distribution Fig 2H
+```{r}
+
+
+distribution.graph(rf_rec_clinical_random, 
+              rf_rec_clinical, 
+              rf_rec_fullpanel_random, 
+              rf_rec_fullpanel,
+              rf_rec_boruta_random, 
+              rf_rec_boruta, 
+              rf_rec_logr_random, 
+              rf_rec_logr, 
+              "Progression")
+
+ggsave("../figures/AdjRecDistribution.png")
+
+```
+
+

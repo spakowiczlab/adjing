@@ -1,0 +1,106 @@
+---
+title: "aucpr_and_cfm_template"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+
+```
+
+Loading file
+```{r}
+
+load(file = "../Outputs/rec_bestmodel_list.Rdata")
+load(file = "../Outputs/gene.exp")
+load(file = "../Outputs/pt.char")
+load(file = "../Outputs/pt.status_no_ipi")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+Splitting the cohorts into the 
+```{r}
+train.outcomes <- sorting(pt.status,
+                          "Adj",
+                          "Therapy complete", 
+                          "Progression")
+
+train.outcomes <- arrange(train.outcomes, desc(Sample))
+
+
+test.outcomes <- sorting(pt.status, 
+                        "Adj Validation",
+                        "Therapy complete",
+                        "Progression") 
+
+test.outcomes <- arrange(test.outcomes, desc(Sample))
+
+
+train.seq <- filter(gene.exp,
+                    (Sample %in% train.outcomes$Sample))
+train.seq <- arrange(train.seq, desc(Sample))
+
+
+test.seq <- filter(gene.exp,
+                   (Sample %in% test.outcomes$Sample))
+test.seq <- arrange(test.seq, desc(Sample))
+
+
+```
+
+```{r}
+train.outcomes <-
+  train.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+
+test.outcomes <-
+  test.outcomes %>%
+  select(Sample,
+         `Reason.for.discontinuation`)
+
+train.seq <- train.seq %>% select(Sample, 
+                                  rec_bestmodel_list
+                                  )
+
+test.seq <- test.seq %>% select(Sample, 
+                                  rec_bestmodel_list
+ )
+
+```
+
+
+```{r}
+seed_list <- c(12345:12369)
+```
+
+```{r}
+rf_rec_boruta <- kTest(seed_list, "Therapy complete", "Progression", "Boruta") 
+
+adj_rec_borutalist <- grabImp(rf_rec_boruta, seed_list)
+
+saveRDS(adj_rec_borutalist, file = "../Outputs/adj_rec_borutalist.RData")
+
+# adj_rec_borutalist <- readRDS(file = "../Outputs/adj_rec_borutalist.RData")
+# adj_tox_borutalist <- readRDS(file = "../Outputs/adj_tox_borutalist.RData")
+# meta_pro_borutalist <- readRDS(file = "../Outputs/meta_pro_borutalist.RData")
+# meta_tox_borutalist <- readRDS(file = "../Outputs/meta_tox_borutalist.RData")
+```
+
+```{r}
+table(adj_rec_borutalist$.)
+```
+
+

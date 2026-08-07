@@ -1,0 +1,279 @@
+---
+title: "meta tox Fig S1ABE"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(caret)
+
+
+```
+
+Loading file
+```{r}
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+met_char <-  readRDS(file = "../Outputs/met_cohort_char.RData")
+
+#note-some ages were censored for deindentification reasons
+#if uncensored ages are needed for verification purposes
+#please contact the corresponding author
+
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+#Creating objects for runs
+```{r}
+full_list <- colnames(met_data)[2:length(met_data)]
+clin_list <- colnames(met_char)[2:length(met_char)]
+bor_list <- c("IL-21", "CD3E")
+logr_list <- c("CD80", "CEACAM1", "SPI1", "SPN", "HAVCR2")
+#Unshuffled 
+seed_list <- c(12345:12369)
+#Shuffled
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+```
+
+
+
+#Meta tox clinical
+```{r}
+#running predictive model
+rf_toxmeta_clinical <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     met_outcomes,
+                     met_char,
+                     "Met Discovery",
+                     "Met Validation",
+                     clin_list) 
+
+
+saveRDS(rf_toxmeta_clinical, file = "../Outputs/rf_toxmeta_clinical.RData")
+
+rf_toxmeta_clinical_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        met_outcomes,
+                                        met_char,
+                                        "Met Discovery",
+                                        "Met Validation",
+                                        clin_list
+)
+
+
+
+saveRDS(rf_toxmeta_clinical_random, file = "../Outputs/rf_toxmeta_clinical_random.RData")
+
+
+
+tox.clinical <- met.p.calc(rf_toxmeta_clinical_random,
+                        "Toxicity",
+                       rf_toxmeta_clinical)
+
+
+metric_graph(rf_toxmeta_clinical_random,
+             "Toxicity",
+             rf_toxmeta_clinical)
+```
+
+
+#Meta tox full panel
+```{r}
+#running predictive model
+rf_toxmeta_fullpanel <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     met_outcomes,
+                     met_data,
+                     "Met Discovery",
+                     "Met Validation",
+                     full_list) 
+
+
+saveRDS(rf_toxmeta_fullpanel, file = "../Outputs/rf_toxmeta_fullpanel.RData")
+
+rf_toxmeta_fullpanel_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        met_outcomes,
+                                        met_data,
+                                        "Met Discovery",
+                                        "Met Validation",
+                                        full_list
+)
+
+
+
+saveRDS(rf_toxmeta_fullpanel_random, file = "../Outputs/rf_toxmeta_fullpanel_random.RData")
+
+
+
+
+tox.fullpanel <- met.p.calc(rf_toxmeta_fullpanel_random,
+                        "Toxicity",
+                       rf_toxmeta_fullpanel)
+
+
+metric_graph(rf_toxmeta_fullpanel_random,
+             "Toxicity",
+             rf_toxmeta_fullpanel)
+```
+
+
+
+
+
+
+#Meta tox boruta
+```{r}
+#running predictive model
+rf_toxmeta_boruta <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     met_outcomes,
+                     met_data,
+                     "Met Discovery",
+                     "Met Validation",
+                     bor_list) 
+
+
+saveRDS(rf_toxmeta_boruta, file = "../Outputs/rf_toxmeta_boruta.RData")
+
+rf_toxmeta_boruta_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        met_outcomes,
+                                        met_data,
+                                        "Met Discovery",
+                                        "Met Validation",
+                                        bor_list
+)
+
+
+
+saveRDS(rf_toxmeta_boruta_random, file = "../Outputs/rf_toxmeta_boruta_random.RData")
+
+
+
+
+tox.boruta <- met.p.calc(rf_toxmeta_boruta_random,
+                        "Toxicity",
+                       rf_toxmeta_boruta)
+
+
+metric_graph(rf_toxmeta_boruta_random,
+             "Toxicity",
+             rf_toxmeta_boruta)
+```
+
+
+#Meta tox logr
+```{r}
+#running predictive model
+rf_toxmeta_logr <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     met_outcomes,
+                     met_data,
+                     "Met Discovery",
+                     "Met Validation",
+                     logr_list) 
+
+
+saveRDS(rf_toxmeta_logr, file = "../Outputs/rf_toxmeta_logr.RData")
+
+rf_toxmeta_logr_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        met_outcomes,
+                                        met_data,
+                                        "Met Discovery",
+                                        "Met Validation",
+                                        logr_list
+)
+
+
+
+saveRDS(rf_toxmeta_logr_random, file = "../Outputs/rf_toxmeta_logr_random.RData")
+
+
+
+
+tox.logr <- met.p.calc(rf_toxmeta_logr_random,
+                        "Toxicity",
+                       rf_toxmeta_logr)
+
+
+metric_graph(rf_toxmeta_logr_random,
+             "Toxicity",
+             rf_toxmeta_logr)
+```
+
+
+
+
+
+
+
+#Clinical + full panel summary Fig S1A
+```{r}
+
+
+double.graph(rf_toxmeta_clinical_random, 
+              rf_toxmeta_clinical, 
+              rf_toxmeta_fullpanel_random, 
+              rf_toxmeta_fullpanel, 
+              "Toxicity")
+
+ggsave("../figures/MetaToxDualGraph.png", width = 11, height = 7)
+
+
+
+```
+
+#Boruta summary graph Fig S1B
+```{r}
+
+single.graph(rf_toxmeta_boruta_random, 
+              rf_toxmeta_boruta,
+             "Boruta Null", 
+             "Boruta", 
+             "Toxicity")
+ggsave("../figures/MetaToxBoruta.png", width = 5.5, height = 7)
+```
+
+#Boruta summary graph Fig S1E
+```{r}
+single.graph(rf_toxmeta_logr_random, 
+              rf_toxmeta_logr,
+             "LogR Null", 
+             "LogR", 
+             "Toxicity")
+
+ggsave("../figures/MetaToxLogr.png", width = 5.5, height = 7)
+
+
+```
+
+
+
+
