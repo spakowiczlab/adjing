@@ -1,18 +1,32 @@
-# adjing [![DOI](https://zenodo.org/badge/651603335.svg)](https://doi.org/10.5281/zenodo.21841704)
+# adjing <img src="man/figures/logo.png" align="right" height="139" alt="adjing hex sticker" />
+
+[![DOI](https://zenodo.org/badge/651603335.svg)](https://doi.org/10.5281/zenodo.21841704)
+[![Preprint](https://img.shields.io/badge/preprint-10.21203%2Frs.3.rs--10629841%2Fv1-blue)](https://doi.org/10.21203/rs.3.rs-10629841/v1)
+
 Scripts to regenerate all analyses and figures presented in:
+
 > ## Pre-treatment T-cell Transcriptional Signatures Predict Immunotherapy Outcomes in Melanoma
 > *Noah Lepola<sup>1,2</sup>, Caroline Dravillas<sup>3</sup>, Shannon Gray<sup>1,2</sup>, Michael S. Bodnar<sup>1,2</sup>, Namrata Arya<sup>1,2</sup>, Richard Wu<sup>3</sup>, Claire Verschraegen<sup>3</sup>, William E Carson<sup>3</sup>, Kari L Kendra<sup>3</sup>, Daniel J Spakowicz<sup>3,4^</sup>, Christin E Burd<sup>1,2,4^</sup>*<br>
 ><sup>1</sup> Department of Molecular Genetics, The Ohio State University College of Arts and Sciences, Columbus, Ohio<br>
 ><sup>2</sup> Department of Cancer Biology and Genetics, The Ohio State University College of Medicine, Columbus, Ohio<br>
 ><sup>3</sup> Division of Medical Oncology, Department of Internal Medicine, The Ohio State University Comprehensive Cancer Center; Columbus, OH, USA.<br>
 ><sup>4</sup> Pelotonia Institute for Immuno-Oncology, The Ohio State University Comprehensive Cancer Center; Columbus, OH, USA.<br>
+>
+> Preprint: [Research Square](https://www.researchsquare.com/article/rs-10629841/v1) ([doi:10.21203/rs.3.rs-10629841/v1](https://doi.org/10.21203/rs.3.rs-10629841/v1))
 
-submitted to *bioRxiv*
+Submitted for publication.
+
+### Graphical abstract
+
+<p align="center">
+  <img src="man/figures/graphical-abstract.png" alt="Graphical abstract: pre-treatment PBTL NanoString transcripts are analyzed with random forest models to predict ICI recurrence and toxicity in adjuvant melanoma and progression in metastatic melanoma" width="900" />
+</p>
 
 ## Repository structure
 
 | Path | Contents |
 | --- | --- |
+| `man/figures/` | Hex sticker (`logo.png`) and graphical abstract used in this README |
 | `manuscript/` | Scripts, shared helpers, and outputs used to regenerate the manuscript figures and supporting tables |
 | `manuscript/scripts/` | R Markdown notebooks that process data and create each figure panel |
 | `manuscript/figures/` | PNG figure panels written by the scripts above |
