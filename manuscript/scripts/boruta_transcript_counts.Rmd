@@ -15,7 +15,7 @@ library(ROCR)
 library(Boruta)
 ```
 
-Loading file
+#Loading files
 ```{r}
 
 gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
@@ -41,13 +41,13 @@ seed_list <- c(12345:12369)
 rf_rec_boruta <- kTest(seed_list,
                        "Therapy complete",
                        "Progression",
-                       "Boruta", 
+                       "Boruta",
                        pt_status,
-                       gene_exp, 
-                       "Adj",
-                       "Adj Validation",
+                       gene_exp,
+                       "Adj_Exp",
+                       "Adj_Val",
                        full_list
-                       ) 
+                       )
 
 adj_rec_borutalist <- grabImp(rf_rec_boruta, seed_list)
 
@@ -66,8 +66,8 @@ rf_tox_boruta <- kTest(seed_list,
                        "Boruta", 
                        pt_status,
                        gene_exp, 
-                       "Adj",
-                       "Adj Validation",
+                       "Adj_Exp",
+                       "Adj_Val",
                        full_list
                        ) 
 
@@ -88,8 +88,8 @@ rf_pro_boruta <- kTest(seed_list,
                        "Boruta", 
                        met_outcomes,
                        met_data, 
-                       "Met Discovery",
-                       "Met Validation",
+                       "Met_Exp",
+                       "Met_Val",
                        full_list
                        ) 
 
@@ -101,24 +101,4 @@ table(met_pro_borutalist$.)
 
 ```
 
-#metastatic toxicity
-```{r}
-rf_toxM_boruta <- kTest(seed_list,
-                       "Therapy complete",
-                       "Toxicity",
-                       "Boruta", 
-                       met_outcomes,
-                       met_data, 
-                       "Met Discovery",
-                       "Met Validation",
-                       full_list
-                       ) 
-
-met_tox_borutalist <- grabImp(rf_toxM_boruta, seed_list)
-
-saveRDS(met_tox_borutalist, file = "../Outputs/met_tox_borutalist.RData")
-
-table(met_tox_borutalist$.)
-
-```
 

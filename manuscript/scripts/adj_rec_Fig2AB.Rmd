@@ -1,0 +1,277 @@
+---
+title: "adj rec Fig 2A-DGH"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(caret)
+```
+
+Loading file
+```{r}
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+pt_char <-  readRDS(file = "../Outputs/pt_char.RData")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+#Creating objects for runs
+```{r}
+full_list <- colnames(gene_exp)[2:length(gene_exp)]
+clin_list <- colnames(pt_char)[2:length(pt_char)]
+bor_list <- c("CCR6")
+logr_list <- c("VTCN1", "CD276", "CD8A")
+greedy_list <- c("CCR6", "KIR_Activating_Subgroup_1", "CD276", "EGR1", "ZBTB7B", "CD8A", "GUSB", "CD160", "YWHAZ", "IL-2", "CEACAM1", "HPRT1", "UBC") 
+
+#Unshuffled 
+seed_list <- c(12345:12369)
+#Shuffled
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+
+nullmodel <- full_join(gene_exp, pt_char)
+null_list <- colnames(nullmodel)[2:length(nullmodel)]
+```
+
+
+#Adj rec null model
+```{r}
+rf_rec_nullmodel_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        pt_status,
+                                        nullmodel,
+                                        "Adj_Exp",
+                                        "Adj_Val",
+                                        null_list
+)
+
+
+
+saveRDS(rf_rec_nullmodel_random, file = "../Outputs/rf_rec_nullmodel_random.RData")
+
+```
+
+
+
+#Adj rec greedy list
+```{r}
+
+ #running predictive model
+ rf_rec_greedylist <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     greedy_list)
+
+
+saveRDS(rf_rec_greedylist, file = "../Outputs/rf_rec_greedylist.RData")
+
+
+
+
+
+rec.greedylist <- met.p.calc(rf_rec_nullmodel_random,
+                        "Progression",
+                       rf_rec_greedylist)
+
+
+metric_graph(rf_rec_nullmodel_random,
+             "Progression",
+             rf_rec_greedylist)
+
+```
+
+
+
+#Adj rec logr list
+```{r}
+
+ #running predictive model
+ rf_rec_logr <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     logr_list)
+
+
+saveRDS(rf_rec_logr, file = "../Outputs/rf_rec_logr.RData")
+
+
+
+rec.logrlist <- met.p.calc(rf_rec_nullmodel_random,
+                        "Progression",
+                       rf_rec_logr)
+
+
+metric_graph(rf_rec_nullmodel_random,
+             "Progression",
+             rf_rec_logr)
+
+```
+
+
+
+#Adj rec boruta
+```{r}
+#running predictive model
+rf_rec_boruta <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     bor_list) 
+
+
+saveRDS(rf_rec_boruta, file = "../Outputs/rf_rec_boruta.RData")
+
+
+
+rec.boruta <- met.p.calc(rf_rec_nullmodel_random,
+                        "Progression",
+                       rf_rec_boruta)
+
+
+metric_graph(rf_rec_nullmodel_random,
+             "Progression",
+             rf_rec_boruta)
+
+```
+
+
+
+#Adj rec clinical
+```{r}
+#running predictive model
+rf_rec_clinical <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     pt_status,
+                     pt_char,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     clin_list) 
+
+
+saveRDS(rf_rec_clinical, file = "../Outputs/rf_rec_clinical.RData")
+
+
+
+rec.clinical <- met.p.calc(rf_rec_nullmodel_random,
+                        "Progression",
+                       rf_rec_clinical)
+
+
+metric_graph(rf_rec_nullmodel_random,
+             "Progression",
+             rf_rec_clinical)
+
+```
+
+
+#Adj rec full panel
+```{r}
+#running predictive model
+rf_rec_fullpanel <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     full_list) 
+
+
+saveRDS(rf_rec_fullpanel, file = "../Outputs/rf_rec_fullpanel.RData")
+
+
+
+rec.fullpanel <- met.p.calc(rf_rec_nullmodel_random,
+                        "Progression",
+                       rf_rec_fullpanel)
+
+
+metric_graph(rf_rec_nullmodel_random,
+             "Progression",
+             rf_rec_fullpanel)
+
+```
+
+
+
+#Loading files for graph
+```{r}
+rf_rec_nullmodel_random <-  readRDS(file = "../Outputs/rf_rec_nullmodel_random.RData")
+rf_rec_clinical <-  readRDS(file = "../Outputs/rf_rec_clinical.RData")
+rf_rec_fullpanel <-  readRDS(file = "../Outputs/rf_rec_fullpanel.RData")
+rf_rec_boruta <-  readRDS(file = "../Outputs/rf_rec_boruta.RData")
+rf_rec_greedylist <-  readRDS(file = "../Outputs/rf_rec_greedylist.RData")
+rf_rec_logr <-  readRDS(file = "../Outputs/rf_rec_logr.RData")
+
+```
+
+
+#F1 graph
+```{r}
+f1.graph(rf_rec_nullmodel_random,
+         rf_rec_clinical,
+         rf_rec_fullpanel,
+         rf_rec_boruta,
+         rf_rec_greedylist, 
+         rf_rec_logr, 
+         "Progression")
+
+ggsave("../figures/rf_rec_f1graph.png", width = 12, height = 5)
+
+```
+
+
+
+#MCC graph
+```{r}
+MCC.graph(rf_rec_nullmodel_random,
+         rf_rec_clinical,
+         rf_rec_fullpanel,
+         rf_rec_boruta,
+         rf_rec_greedylist, 
+         rf_rec_logr, 
+         "Progression")
+
+ggsave("../figures/rf_rec_MCCgraph.png", width = 12, height = 5)
+
+```
+
+
+
+
+
+
+
+
+

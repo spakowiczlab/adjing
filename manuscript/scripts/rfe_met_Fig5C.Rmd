@@ -1,0 +1,115 @@
+---
+title: "RFE abd LogR"
+author: "Noah Lepola"
+date: "2026-09-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(caret)
+library(randomForest)
+library(tidyverse)
+library(ranger)
+
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+
+
+geneoutcome <- full_join(met_data, met_outcomes)
+
+```
+
+#Met pro RFE feature selection
+```{r}
+pro_data <- geneoutcome[, !(names(geneoutcome) %in% "Sample")] %>%
+  filter(Cohort == "Met_Exp") %>%
+  filter(Reason.for.discontinuation == "Progression" | Reason.for.discontinuation == "Therapy complete") %>%
+  select(-Cohort)
+
+#separating predictors from  Reason.for.discontinuation
+x_vars_pro <- pro_data[, !(names(pro_data) %in% "Reason.for.discontinuation")]
+y_var_pro <- pro_data$Reason.for.discontinuation
+y_var_pro <- as.factor(y_var_pro)
+
+#define the control using random forest functions
+control <- rfeControl(
+  functions = rfFuncs,  
+  method = "cv",      
+  number = 5     
+)
+
+#run the RFE algorithm
+set.seed(43201)     
+rfe_results_pro <- rfe(
+  x = x_vars_pro,
+  y = y_var_pro,
+  sizes = c(1:79),     
+  rfeControl = control
+)
+
+#print summary of the feature selection process
+print(rfe_results_pro)
+
+#plot performance vs. number of features
+ggplot(rfe_results_pro, output = "ggplot") +
+  geom_line() +
+  geom_point(color = "black", size = 2) +
+  labs(x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18))
+
+ggsave("../figures/rf_metapro_greedygraph.png", width = 7, height = 7)
+
+#extract the top 2 features directly without updating the model object
+features_size_2 <- rfe_results_pro$control$functions$selectVar(rfe_results_pro$variables, 2)
+print(features_size_2)
+```
+
+#Met exhaustive pro
+```{r}
+pro_geneoutcome <- geneoutcome %>%
+    filter(Cohort == "Met_Exp") %>%
+    filter(Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+
+#define factors and target variable name
+pro_factors <- c("BCL6", "SPN", "CD127", "TNF", "PTPRC_1", "RORC", "CDKN2A (p16)", "CD4", "PTPRC_3", "CD27")
+target_col <- "Reason.for.discontinuation"
+pro_target <- as.factor(pro_geneoutcome[[target_col]])
+
+#generate all possible non-empty combinations of the 10 factors
+allpro_subsets <- unlist(lapply(1:length(pro_factors), function(k) {
+  combn(pro_factors, k, simplify = FALSE) }), recursive = FALSE)
+
+#make data frame to store results
+pro_results <- data.frame(
+  Model_ID = seq_along(allpro_subsets),
+  Features = sapply(allpro_subsets, paste, collapse = " + "),
+  Num_Features = sapply(allpro_subsets, length),
+  Performance = NA_real_
+)
+
+set.seed(43201)
+for (i in seq_along(allpro_subsets)) {
+  current_vars <- allpro_subsets[[i]]
+  formula_str <- paste(target_col, "~", paste(current_vars, collapse = " + "))
+  
+  fit <- ranger(
+    x = pro_geneoutcome[, current_vars, drop = FALSE], 
+    y = pro_target,   
+    num.trees = 100,     
+    verbose = FALSE
+  )
+  
+  #store the OOB error 
+  pro_results$Performance[i] <- fit$prediction.error
+}
+
+#view the top 20 best-performing models (lowest error)
+best_models <- pro_results %>% arrange(Performance)
+head(best_models, 20)
+```
+
+

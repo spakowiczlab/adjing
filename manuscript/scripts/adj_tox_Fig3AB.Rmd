@@ -1,0 +1,273 @@
+---
+title: "adj tox Fig 3ABE"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(caret)
+
+```
+
+Loading file
+```{r}
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+pt_char <-  readRDS(file = "../Outputs/pt_char.RData")
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+#Creating objects for runs
+```{r}
+full_list <- colnames(gene_exp)[2:length(gene_exp)]
+clin_list <- colnames(pt_char)[2:length(pt_char)]
+bor_list <- c("TNF", "CDKN2A (ARF)", "IL-2", "BCL6", "NECTIN2")
+greedy_list <- c("TNF", "CDKN2A (ARF)", "IL-2", "IL-21", "KLRG1", "SPN") 
+logr_list <- c("IL-21", "AHR", "B3GAT1") 
+
+
+
+#Unshuffled 
+seed_list <- c(12345:12369)
+#Shuffled
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+
+nullmodel <- full_join(gene_exp, pt_char)
+null_list <- colnames(nullmodel)[2:length(nullmodel)]
+```
+
+
+
+
+#Adj tox null model
+```{r}
+rf_tox_nullmodel_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Toxicity",
+                                        pt_status,
+                                        nullmodel,
+                                        "Adj_Exp",
+                                        "Adj_Val",
+                                        null_list
+)
+
+
+
+saveRDS(rf_tox_nullmodel_random, file = "../Outputs/rf_tox_nullmodel_random.RData")
+
+```
+
+
+
+#Adj tox logr
+```{r}
+#running predictive model
+rf_tox_logr <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     logr_list) 
+
+
+saveRDS(rf_tox_logr, file = "../Outputs/rf_tox_logr.RData")
+
+
+
+tox.logr <- met.p.calc(rf_tox_nullmodel_random,
+                        "Toxicity",
+                       rf_tox_logr)
+
+
+metric_graph(rf_tox_nullmodel_random,
+             "Toxicity",
+             rf_tox_logr)
+```
+
+
+
+
+#Adj tox greedy list
+```{r}
+#running predictive model
+rf_tox_greedylist <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     greedy_list) 
+
+
+saveRDS(rf_tox_greedylist, file = "../Outputs/rf_tox_greedylist.RData")
+
+
+
+
+tox.greedylist <- met.p.calc(rf_tox_nullmodel_random,
+                        "Toxicity",
+                       rf_tox_greedylist)
+
+
+metric_graph(rf_tox_nullmodel_random,
+             "Toxicity",
+             rf_tox_greedylist)
+```
+
+
+
+
+#Adj tox boruta
+```{r}
+#running predictive model
+rf_tox_boruta <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     bor_list) 
+
+
+saveRDS(rf_tox_boruta, file = "../Outputs/rf_tox_boruta.RData")
+
+
+
+
+tox.boruta <- met.p.calc(rf_tox_nullmodel_random,
+                        "Toxicity",
+                       rf_tox_boruta)
+
+
+metric_graph(rf_tox_nullmodel_random,
+             "Toxicity",
+             rf_tox_boruta)
+```
+
+
+
+#Adj tox clinical
+```{r}
+#running predictive model
+rf_tox_clinical <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     pt_status,
+                     pt_char,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     clin_list) 
+
+
+saveRDS(rf_tox_clinical, file = "../Outputs/rf_tox_clinical.RData")
+
+
+tox.clinical <- met.p.calc(rf_tox_nullmodel_random,
+                        "Toxicity",
+                       rf_tox_clinical)
+
+
+metric_graph(rf_tox_nullmodel_random,
+             "Toxicity",
+             rf_tox_clinical)
+```
+
+
+#Adj tox full panel
+```{r}
+#running predictive model
+rf_tox_fullpanel <- kTest(seed_list,
+                     "Therapy complete",
+                     "Toxicity",
+                     "Model",
+                     pt_status,
+                     gene_exp,
+                     "Adj_Exp",
+                     "Adj_Val",
+                     full_list) 
+
+
+saveRDS(rf_tox_fullpanel, file = "../Outputs/rf_tox_fullpanel.RData")
+
+
+
+
+
+tox.fullpanel <- met.p.calc(rf_tox_nullmodel_random,
+                        "Toxicity",
+                       rf_tox_fullpanel)
+
+
+metric_graph(rf_tox_nullmodel_random,
+             "Toxicity",
+             rf_tox_fullpanel)
+```
+
+
+```{r}
+rf_tox_nullmodel_random <-  readRDS(file = "../Outputs/rf_tox_nullmodel_random.RData")
+rf_tox_clinical <-  readRDS(file = "../Outputs/rf_tox_clinical.RData")
+rf_tox_fullpanel <-  readRDS(file = "../Outputs/rf_tox_fullpanel.RData")
+rf_tox_boruta <-  readRDS(file = "../Outputs/rf_tox_boruta.RData")
+rf_tox_greedylist <-  readRDS(file = "../Outputs/rf_tox_greedylist.RData")
+rf_tox_logr <-  readRDS(file = "../Outputs/rf_tox_logr.RData")
+
+
+```
+
+
+
+#F1 graph
+```{r}
+f1.graph(rf_tox_nullmodel_random,
+         rf_tox_clinical,
+         rf_tox_fullpanel,
+         rf_tox_boruta,
+         rf_tox_greedylist, 
+         rf_tox_logr, 
+         "Toxicity")
+
+ggsave("../figures/rf_tox_f1graph.png", width = 12, height = 5)
+
+```
+
+
+
+#MCC graph
+```{r}
+MCC.graph(rf_tox_nullmodel_random,
+         rf_tox_clinical,
+         rf_tox_fullpanel,
+         rf_tox_boruta,
+         rf_tox_greedylist, 
+         rf_tox_logr, 
+         "Toxicity")
+
+ggsave("../figures/rf_tox_MCCgraph.png", width = 12, height = 5)
+
+```
+
+
+
+

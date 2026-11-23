@@ -58,10 +58,10 @@ getROC <- function(seed, train.seq, train.outcomes, test.seq, test.outcomes, neg
       warning("Boruta still selected fewer than min_vars — filling with top RF importance features")
       
       # Fit quick RF on all predictors
-      rf_temp <- randomForest(x = x_train, y = y_train)#, ntree = max(500, tree))
+      rf_temp <- randomForest::randomForest(x = x_train, y = y_train)
       
       # Rank features by importance
-      imp <- importance(rf_temp)
+      imp <- randomForest::importance(rf_temp)
       top_vars <- rownames(imp)[order(-imp[,1])]
       
       # Add top features until min_vars is met
@@ -95,8 +95,8 @@ getROC <- function(seed, train.seq, train.outcomes, test.seq, test.outcomes, neg
   # Prediction confusion matrix
   pred_cm <- table(observed = test.outcomes$Reason.for.discontinuation,
                    predicted = test.preds)
-  
-  print(pred_cm)
+  #remove pound later
+  # print(pred_cm)
   
   
   prediction_for_roc_curve <- predict(model.training, 
@@ -109,11 +109,11 @@ getROC <- function(seed, train.seq, train.outcomes, test.seq, test.outcomes, neg
                        c(neg.outcome, pos.outcome))
 
   perf <- performance(pred, "tpr", "fpr")
-  
+  #remove pound later
   AUCPR_ROCR <- performance(pred, measure = "aucpr")
-  print(AUCPR_ROCR)
+  # print(AUCPR_ROCR)
   AUCPR <- AUCPR_ROCR@y.values[[1]]
-  print(AUCPR)
+  # print(AUCPR)
   
   df <- data.frame(FalsePositive=c(perf@x.values[[1]]),
                    TruePositive=c(perf@y.values[[1]]))
@@ -241,12 +241,26 @@ add.metrics <- function(randomdata, output, pos.outcome){
                              Specificity = NA,
                              Precision = NA,
                              Recall = NA,
-                             F1 = NA)
+                             F1 = NA,
+                             MCC = NA)
   
   for (i in 1:25000) {
     test_conmat <- confusionMatrix(randomdata[[i]][[1]][[3]],
                                    positive = pos.outcome)
     
+    if(pos.outcome == "Toxicity"){
+      TP <- test_conmat$table[2, 2]  # True Positives
+      TN <- test_conmat$table[1, 1]  # True Negatives
+      FP <- test_conmat$table[1, 2]  # False Positives
+      FN <- test_conmat$table[2, 1]  # False Negatives
+    }else{
+      TP <- test_conmat$table[1, 1]  # True Positives
+      TN <- test_conmat$table[2, 2]  # True Negatives
+      FP <- test_conmat$table[2, 1]  # False Positives
+      FN <- test_conmat$table[1, 2]  # False Negatives
+    }
+    
+    test_conmat2$MCC[i] <-(TP*TN-FP*FN)/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
     test_conmat2$Accuracy[i] <- test_conmat[[3]][1]
     test_conmat2$Specificity[i] <- test_conmat[[4]][2]
     test_conmat2$Precision[i] <- test_conmat[[4]][5]
@@ -256,13 +270,19 @@ add.metrics <- function(randomdata, output, pos.outcome){
     
   }
   test_conmat2[is.na(test_conmat2)] <- 0
+  is.nan.data.frame <- function(x)
+    do.call(cbind, lapply(x, is.nan))
+  
+  test_conmat2[is.nan(test_conmat2)] <- 0
+  
   x = 1
   output <- data.frame(run = 1:1000,
                        Avg.Accuracy = NA,
                        Avg.Specificity = NA,
                        Avg.Precision = NA,
                        Avg.Recall = NA,
-                       Avg.F1 = NA)
+                       Avg.F1 = NA, 
+                       Avg.MCC = NA)
   
   for (i in 1:1000) {
     y = x+24
@@ -272,6 +292,7 @@ add.metrics <- function(randomdata, output, pos.outcome){
     output$Avg.Precision[i] <- mean(test_conmat2$Precision[x:y])
     output$Avg.Recall[i] <- mean(test_conmat2$Recall[x:y])
     output$Avg.F1[i] <- mean(test_conmat2$F1[x:y])
+    output$Avg.MCC[i] <- mean(test_conmat2$MCC[x:y])
     
     x = x+25
   }
@@ -328,7 +349,7 @@ for (j in 1:length(run_number)) {
                             genelist) 
   
   output <- append(output, shuffled_results)
-
+  Sys.sleep(1)
   output
 }
 output
@@ -349,12 +370,28 @@ met.p.calc <- function(randomdata, pos.outcome, dataobject){
                              Specificity = NA,
                              Precision = NA,
                              Recall = NA,
-                             F1 = NA)
+                             F1 = NA,
+                             MCC = NA)
   
   #generating additional metrics for experimental run    
   for (i in 1:25) {
     temp_conmat <- confusionMatrix(dataobject[[i]][[1]][[3]],
                                    positive = pos.outcome)
+    
+    if(pos.outcome == "Toxicity"){
+      TP <- temp_conmat$table[2, 2]  # True Positives
+      TN <- temp_conmat$table[1, 1]  # True Negatives
+      FP <- temp_conmat$table[1, 2]  # False Positives
+      FN <- temp_conmat$table[2, 1]  # False Negatives
+    }else{
+    TP <- temp_conmat$table[1, 1]  # True Positives
+    TN <- temp_conmat$table[2, 2]  # True Negatives
+    FP <- temp_conmat$table[2, 1]  # False Positives
+    FN <- temp_conmat$table[1, 2]  # False Negatives
+    }
+    
+
+    temp_conmat2$MCC[i] <-(TP*TN-FP*FN)/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
     
     temp_conmat2$Accuracy[i] <- temp_conmat[[3]][1]
     
@@ -372,7 +409,8 @@ met.p.calc <- function(randomdata, pos.outcome, dataobject){
                        Specificity = NA,
                        Precision = NA,
                        Recall = NA,
-                       F1 = NA)
+                       F1 = NA, 
+                       MCC = NA)
   
   
   avg.acc <- mean(temp_conmat2$Accuracy)
@@ -390,15 +428,32 @@ met.p.calc <- function(randomdata, pos.outcome, dataobject){
   avg.recall <- mean(temp_conmat2$Recall)
   output$Recall[1] <- p.calc(avg.recall,
                              random_met$Avg.Recall)
-  
+
+  temp_conmat2$F1[is.na(temp_conmat2$F1)] <- 0
   avg.F1 <- mean(temp_conmat2$F1)
-  avg.F1[is.na(avg.F1)] <- 0
   
   output$F1[1] <- p.calc(avg.F1,
                          random_met$Avg.F1)
   
   
   print(output$F1)
+  print("F1 percentile")
+  
+  
+  is.nan.data.frame <- function(x)
+    do.call(cbind, lapply(x, is.nan))
+  
+  temp_conmat2[is.nan(temp_conmat2)] <- 0
+  
+  avg.MCC <- mean(temp_conmat2$MCC)
+  
+  output$MCC[1] <- p.calc(avg.MCC,
+                         random_met$Avg.MCC)
+  
+  print(output$MCC)
+  print("MCC percentile")
+  
+  
   
   
   output
@@ -436,9 +491,9 @@ metric_graph <- function(randomdata, pos.outcome, dataobject){
     modelmetricsdf$F1[i] <- temp_conmat[[4]][7]
   }
   
+  modelmetricsdf$F1[is.na(modelmetricsdf$F1)] <- 0
   modelmetricsdf.avg.F1<- mean(modelmetricsdf$F1)
-  modelmetricsdf.avg.F1[is.na(modelmetricsdf.avg.F1)] <- 0
-  
+
 
   metrics_plot <- ggplot(data = metricsdf, aes(x = Avg.F1)) + 
     geom_density(fill = "skyblue", alpha = 0.4, linewidth = 0.75) + 
@@ -464,281 +519,11 @@ metric_graph <- function(randomdata, pos.outcome, dataobject){
 
 
 
-distribution.graph <- function(clinrandom, clindata, fpanelrandom, fpaneldata, borutarandom, borutadata, logrrandom, logrdata, pos.outcome){
-  
-  random.distribution <- function(randomdata, pos.outcome){
-    output <- data.frame(run = 1:25000,
-                         F1 = NA)
-    
-    for (i in 1:25000) {
-      test_conmat <- confusionMatrix(randomdata[[i]][[1]][[3]],
-                                     positive = pos.outcome)
-      
-      output$F1[i] <- test_conmat[[4]][7]
-      
-      
-    }
-    output[is.na(output)] <- 0
-    output
-  }
-  
-  
-  performance.distribution <- function(data, random, pos.outcome){
-    
-    temp_data2 <- data.frame(run = 1:25,
-                             F1 = NA)
-    
-    for (i in 1:25) {
-      temp_data <- confusionMatrix(data[[i]][[1]][[3]],
-                                   positive = pos.outcome)
-      
-      
-      temp_data2$F1[i] <- temp_data[[4]][7]
-      
-    }
-    output <- data.frame(run = 1:25,
-                         F1 = NA)
-    
-    for (i in 1:25) {
-      output$F1[i] <- p.calc(temp_data2$F1[i], random)
-      
-    }
-    
-    output
-  }
-  
-  #clinical set
-  clinran <- random.distribution(clinrandom, pos.outcome)
-  
-  clin <- as.data.frame((clinran$F1 - min(clinran$F1)) /
-                          (max(clinran$F1) - min(clinran$F1))) 
-  
-  colnames(clin)[1] <- "Range"
-  clin$Model <- "Clinical Null"
-  
-  clinmodel <- performance.distribution(clindata, clinran$F1, pos.outcome)
-  
-  
-  colnames(clinmodel)[2] <- "Range"
-  clinmodel$Model <- "Clinical"
-  
-  
-  
-  
-  
-  #full panel set
-  fpanelran <- random.distribution(fpanelrandom, pos.outcome)
-  
-  fpanel <- as.data.frame((fpanelran$F1 - min(fpanelran$F1)) /
-                            (max(fpanelran$F1) - min(fpanelran$F1))) 
-  
-  colnames(fpanel)[1] <- "Range"
-  fpanel$Model <- "Full Panel Null"
-  
-  fpanelmodel <- performance.distribution(fpaneldata, fpanelran$F1, pos.outcome)
-  
-  
-  colnames(fpanelmodel)[2] <- "Range"
-  fpanelmodel$Model <- "Full Panel"
-  
-  
-  
-  
-  
-  #boruta set
-  borutaran <- random.distribution(borutarandom, pos.outcome)
-  
-  boruta <- as.data.frame((borutaran$F1 - min(borutaran$F1)) /
-                            (max(borutaran$F1) - min(borutaran$F1))) 
-  
-  colnames(boruta)[1] <- "Range"
-  boruta$Model <- "Boruta Null"
-  
-  borutamodel <- performance.distribution(borutadata, borutaran$F1, pos.outcome)
-  
-  
-  colnames(borutamodel)[2] <- "Range"
-  borutamodel$Model <- "Boruta"
-  
-  
-  
-  
-  
-  
-  #logr set
-  logrran <- random.distribution(logrrandom, pos.outcome)
-  
-  logr <- as.data.frame((logrran$F1 - min(logrran$F1)) /
-                          (max(logrran$F1) - min(logrran$F1))) 
-  
-  colnames(logr)[1] <- "Range"
-  logr$Model <- "LogR Null"
-  
-  logrmodel <- performance.distribution(logrdata, logrran$F1, pos.outcome)
-  
-  
-  colnames(logrmodel)[2] <- "Range"
-  logrmodel$Model <- "LogR"
-  
-  
-  
-  
-  
-  
-  model_list <- list(clinmodel, fpanelmodel, borutamodel, logrmodel)
-  
-  #merge all data frames in list
-  model_list <- model_list %>% reduce(full_join, by= c('Model', 'Range'))
-  
-  
-  custom_order <- c("Clinical",
-                    "Full Panel",
-                    "Boruta",
-                    "LogR")
-  model_list$Model <- factor(model_list$Model, levels = custom_order)
-  
-  model_list <- model_list %>% replace(is.na(.), 0)
-  
-  ggplot(model_list, aes(x = Model, y = Range, fill = Model)) +
-    geom_boxplot() +
-    scale_y_continuous(limits = c(0, 1)) +
-    # Assign colors in the exact order the groups will appear on the X-axis
-    scale_fill_manual(values = c("blue", "red", "blue", "red")) +
-    theme_minimal() +
-    labs(
-      x = NULL,
-      y = NULL
-    ) +
-    theme(legend.position = "none", 
-          axis.text.x = element_text(face = "bold", size = 22),
-          axis.text.y = element_text(face = "bold", size = 18)
-    ) 
-  
-  
-}
 
 
 
 
-double.graph <- function(leftrandom, leftdata, rightrandom, rightdata, pos.outcome){
-  
-  random.distribution <- function(randomdata, pos.outcome){
-    output <- data.frame(run = 1:25000,
-                         F1 = NA)
-    
-    for (i in 1:25000) {
-      test_conmat <- confusionMatrix(randomdata[[i]][[1]][[3]],
-                                     positive = pos.outcome)
-      
-      output$F1[i] <- test_conmat[[4]][7]
-      
-      
-    }
-    output[is.na(output)] <- 0
-    output
-  }
-  
-  
-  performance.distribution <- function(data, random, pos.outcome){
-    
-    temp_data2 <- data.frame(run = 1:25,
-                             F1 = NA)
-    
-    for (i in 1:25) {
-      temp_data <- confusionMatrix(data[[i]][[1]][[3]],
-                                   positive = pos.outcome)
-      
-      
-      temp_data2$F1[i] <- temp_data[[4]][7]
-      
-    }
-    output <- data.frame(run = 1:25,
-                         F1 = NA)
-    
-    for (i in 1:25) {
-      output$F1[i] <- p.calc(temp_data2$F1[i], random)
-      
-    }
-    
-    output
-  }
-  
-  
-  #Left graph set
-  leftran <- random.distribution(leftrandom, pos.outcome)
-  
-  left <- as.data.frame((leftran$F1 - min(leftran$F1)) /
-                          (max(leftran$F1) - min(leftran$F1))) 
-  
-  colnames(left)[1] <- "Range"
-  left$Model <- "Clinical Null"
-  
-  leftmodel <- performance.distribution(leftdata, leftran$F1, pos.outcome)
-  
-  
-  colnames(leftmodel)[2] <- "Range"
-  leftmodel$Model <- "Clinical"
-  
-  
-  
-  
-  
-  
-  
-  #Right graph set
-  rightran <- random.distribution(rightrandom, pos.outcome)
-  
-  right <- as.data.frame((rightran$F1 - min(rightran$F1)) /
-                           (max(rightran$F1) - min(rightran$F1))) 
-  
-  colnames(right)[1] <- "Range"
-  right$Model <- "Full Panel Null"
-  
-  rightmodel <- performance.distribution(rightdata, rightran$F1, pos.outcome)
-  
-  
-  colnames(rightmodel)[2] <- "Range"
-  rightmodel$Model <- "Full Panel"
-  
-  
-  
-  model_list <- list(left, leftmodel, right, rightmodel)
-  
-  #merge all data frames in list
-  model_list <- model_list %>% reduce(full_join, by= c('Model', 'Range'))
-  
-  
-  model_order <- c("Clinical Null",
-                   "Clinical",
-                   "Full Panel Null",
-                   "Full Panel")
-  
-  model_list <- model_list %>% replace(is.na(.), 0)
-  
-  model_list$Model <- factor(model_list$Model, levels = model_order)
-  
-  
-  
-  ggplot(model_list, aes(x = Model, y = Range, fill = Model)) +
-    geom_boxplot() +
-    scale_fill_manual(values = c("skyblue", "red", "skyblue", "red")) +
-    theme_minimal() +
-    labs(
-      x = NULL,
-      y = NULL
-    ) +
-    theme(legend.position = "none", 
-          axis.text.x = element_text(face = "bold", size = 26),
-          axis.text.y = element_text(face = "bold", size = 24)
-    )
-  
-}
-
-
-
-
-
-single.graph <- function(leftrandom, rightdata, randomname, dataname, pos.outcome){
+f1.graph <- function(NullModelData, Clindata, Fullpaneldata, Borutadata, RFEdata, LogRdata, pos.outcome){
   
   random.distribution <- function(randomdata, pos.outcome){
     output <- data.frame(run = 1:25000,
@@ -783,33 +568,63 @@ single.graph <- function(leftrandom, rightdata, randomname, dataname, pos.outcom
   
   
   #creating data objects
-  leftran <- random.distribution(leftrandom, pos.outcome)
+  leftran <- random.distribution(NullModelData, pos.outcome)
   
   left <- as.data.frame((leftran$F1 - min(leftran$F1)) /
                           (max(leftran$F1) - min(leftran$F1))) 
   
   colnames(left)[1] <- "Range"
-  left$Model <- randomname
+  left$Model <- "Null"
   
   
-  rightmodel <- performance.distribution(rightdata, leftran$F1, pos.outcome)
+  Clinmodel <- performance.distribution(Clindata, leftran$F1, pos.outcome)
   
   
-  colnames(rightmodel)[2] <- "Range"
-  rightmodel$Model <- dataname
+  colnames(Clinmodel)[2] <- "Range"
+  Clinmodel$Model <- "Clinical"
+  
+  
+  Fullmodel <- performance.distribution(Fullpaneldata, leftran$F1, pos.outcome)
+  
+  colnames(Fullmodel)[2] <- "Range"
+  Fullmodel$Model <- "Full panel"
   
   
   
+  Borutamodel <- performance.distribution(Borutadata, leftran$F1, pos.outcome)
+  
+  colnames(Borutamodel)[2] <- "Range"
+  Borutamodel$Model <- "Boruta"
   
   
-  model_list <- list(left, rightmodel)
+  RFEmodel <- performance.distribution(RFEdata, leftran$F1, pos.outcome)
+  
+  colnames(RFEmodel)[2] <- "Range"
+  RFEmodel$Model <- "RFE"
+  
+  
+  LogRmodel <- performance.distribution(LogRdata, leftran$F1, pos.outcome)
+  
+  colnames(LogRmodel)[2] <- "Range"
+  LogRmodel$Model <- "LogR"
+  
+  
+
+  
+  
+  model_list <- list(left, Clinmodel, Fullmodel, Borutamodel, RFEmodel, LogRmodel)
   
   #merge all data frames in list
   model_list <- model_list %>% reduce(full_join, by= c('Model', 'Range'))
   
   
-  model_order <- c(randomname,
-                   dataname)
+  model_order <- c("Null",
+                   "Clinical",
+                   "Full panel", 
+                   "Boruta", 
+                   "RFE", 
+                   "LogR"
+                   )
   
   model_list <- model_list %>% replace(is.na(.), 0)
   
@@ -817,24 +632,396 @@ single.graph <- function(leftrandom, rightdata, randomname, dataname, pos.outcom
   
   
   
-  single.plot <- ggplot(model_list, aes(x = Model, y = Range, fill = Model)) +
+  f1.plot <- ggplot(model_list, aes(x = Model, y = Range, fill = Model)) +
     geom_boxplot() +
-    scale_fill_manual(values = c("skyblue", "red")) +
+    scale_fill_manual(values = c("grey63", "snow", "snow", "snow", "snow", "snow")) +
     theme_minimal() +
     labs(
       x = NULL,
       y = NULL
     ) +
     theme(legend.position = "none", 
-          axis.text.x = element_text(face = "bold", size = 26),
-          axis.text.y = element_text(face = "bold", size = 24)
+          axis.text.x = element_blank(),
+          axis.text.y = element_text(size = 24)
     )
-  print(single.plot)
+  print(f1.plot)
 }
 
 
 
 
+
+
+
+MCC.graph <- function(NullModelData, Clindata, Fullpaneldata, Borutadata, RFEdata, LogRdata, pos.outcome){
+  
+  random.distribution <- function(randomdata, pos.outcome){
+    output <- data.frame(run = 1:25000,
+                         MCC = NA)
+    
+    for (i in 1:25000) {
+      test_conmat <- confusionMatrix(randomdata[[i]][[1]][[3]],
+                                     positive = pos.outcome)
+      
+      if(pos.outcome == "Toxicity"){
+        TP <- test_conmat$table[2, 2]  # True Positives
+        TN <- test_conmat$table[1, 1]  # True Negatives
+        FP <- test_conmat$table[1, 2]  # False Positives
+        FN <- test_conmat$table[2, 1]  # False Negatives
+      }else{
+        TP <- test_conmat$table[1, 1]  # True Positives
+        TN <- test_conmat$table[2, 2]  # True Negatives
+        FP <- test_conmat$table[2, 1]  # False Positives
+        FN <- test_conmat$table[1, 2]  # False Negatives
+      }
+      
+      output$MCC[i] <-(TP*TN-FP*FN)/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
+      
+      
+    }
+    output[is.na(output)] <- 0
+    output
+  }
+  
+  
+  performance.distribution <- function(data, random, pos.outcome){
+    
+    temp_data2 <- data.frame(run = 1:25,
+                             MCC = NA)
+    
+    for (i in 1:25) {
+      temp_data <- confusionMatrix(data[[i]][[1]][[3]],
+                                   positive = pos.outcome)
+      
+      
+      if(pos.outcome == "Toxicity"){
+        TP <- temp_data$table[2, 2]  # True Positives
+        TN <- temp_data$table[1, 1]  # True Negatives
+        FP <- temp_data$table[1, 2]  # False Positives
+        FN <- temp_data$table[2, 1]  # False Negatives
+      }else{
+        TP <- temp_data$table[1, 1]  # True Positives
+        TN <- temp_data$table[2, 2]  # True Negatives
+        FP <- temp_data$table[2, 1]  # False Positives
+        FN <- temp_data$table[1, 2]  # False Negatives
+      }
+      
+      
+      temp_data2$MCC[i] <-(TP*TN-FP*FN)/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))      
+    }
+    output <- data.frame(run = 1:25,
+                         MCC = NA)
+    
+    for (i in 1:25) {
+      output$MCC[i] <- p.calc(temp_data2$MCC[i], random)
+      
+    }
+    
+    output
+  }
+  
+  
+  #creating data objects
+  leftran <- random.distribution(NullModelData, pos.outcome)
+  
+  left <- as.data.frame((leftran$MCC - min(leftran$MCC)) /
+                          (max(leftran$MCC) - min(leftran$MCC))) 
+  
+  colnames(left)[1] <- "Range"
+  left$Model <- "Null"
+  
+  
+  Clinmodel <- performance.distribution(Clindata, leftran$MCC, pos.outcome)
+  
+  
+  colnames(Clinmodel)[2] <- "Range"
+  Clinmodel$Model <- "Clinical"
+  
+  
+  Fullmodel <- performance.distribution(Fullpaneldata, leftran$MCC, pos.outcome)
+  
+  colnames(Fullmodel)[2] <- "Range"
+  Fullmodel$Model <- "Full panel"
+  
+  
+  
+  Borutamodel <- performance.distribution(Borutadata, leftran$MCC, pos.outcome)
+  
+  colnames(Borutamodel)[2] <- "Range"
+  Borutamodel$Model <- "Boruta"
+  
+  
+  RFEmodel <- performance.distribution(RFEdata, leftran$MCC, pos.outcome)
+  
+  colnames(RFEmodel)[2] <- "Range"
+  RFEmodel$Model <- "RFE"
+  
+  
+  LogRmodel <- performance.distribution(LogRdata, leftran$MCC, pos.outcome)
+  
+  colnames(LogRmodel)[2] <- "Range"
+  LogRmodel$Model <- "LogR"
+  
+  
+  
+  
+  
+  model_list <- list(left, Clinmodel, Fullmodel, Borutamodel, RFEmodel, LogRmodel)
+  
+  #merge all data frames in list
+  model_list <- model_list %>% reduce(full_join, by= c('Model', 'Range'))
+  
+  
+  model_order <- c("Null",
+                   "Clinical",
+                   "Full panel", 
+                   "Boruta", 
+                   "RFE", 
+                   "LogR"
+  )
+  
+  model_list <- model_list %>% replace(is.na(.), 0)
+  
+  model_list$Model <- factor(model_list$Model, levels = model_order)
+  
+  
+  
+  MCC.plot <- ggplot(model_list, aes(x = Model, y = Range, fill = Model)) +
+    geom_boxplot() +
+    scale_fill_manual(values = c("grey63", "snow", "snow", "snow", "snow", "snow")) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL
+    ) +
+    theme(legend.position = "none", 
+          axis.text.y = element_text(size = 24),
+          axis.text.x = element_blank()
+    )
+  print(MCC.plot)
+}
+
+
+
+
+
+
+f1.graph.cross <- function(NullModelData, CrossData, pos.outcome){
+  
+  random.distribution <- function(randomdata, pos.outcome){
+    output <- data.frame(run = 1:25000,
+                         F1 = NA)
+    
+    for (i in 1:25000) {
+      test_conmat <- confusionMatrix(randomdata[[i]][[1]][[3]],
+                                     positive = pos.outcome)
+      
+      output$F1[i] <- test_conmat[[4]][7]
+      
+      
+    }
+    output[is.na(output)] <- 0
+    output
+  }
+  
+  
+  performance.distribution <- function(data, random, pos.outcome){
+    
+    temp_data2 <- data.frame(run = 1:25,
+                             F1 = NA)
+    
+    for (i in 1:25) {
+      temp_data <- confusionMatrix(data[[i]][[1]][[3]],
+                                   positive = pos.outcome)
+      
+      
+      temp_data2$F1[i] <- temp_data[[4]][7]
+      
+    }
+    output <- data.frame(run = 1:25,
+                         F1 = NA)
+    
+    for (i in 1:25) {
+      output$F1[i] <- p.calc(temp_data2$F1[i], random)
+      
+    }
+    
+    output
+  }
+  
+  
+  #creating data objects
+  leftran <- random.distribution(NullModelData, pos.outcome)
+  
+  left <- as.data.frame((leftran$F1 - min(leftran$F1)) /
+                          (max(leftran$F1) - min(leftran$F1))) 
+  
+  colnames(left)[1] <- "Range"
+  left$Model <- "Null"
+  
+  
+  Crossmodel <- performance.distribution(CrossData, leftran$F1, pos.outcome)
+  
+  
+  colnames(Crossmodel)[2] <- "Range"
+  Crossmodel$Model <- "modellabel"
+  
+  
+  
+  model_list <- list(left, Crossmodel)
+  
+  #merge all data frames in list
+  model_list <- model_list %>% reduce(full_join, by= c('Model', 'Range'))
+  
+  
+  model_order <- c("Null",
+                   "modellabel"
+  )
+  
+  model_list <- model_list %>% replace(is.na(.), 0)
+  
+  model_list$Model <- factor(model_list$Model, levels = model_order)
+  
+  
+  
+  f1.plot <- ggplot(model_list, aes(x = Model, y = Range, fill = Model)) +
+    geom_boxplot() +
+    scale_fill_manual(values = c("grey63", "snow")) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL
+    ) +
+    theme(legend.position = "none", 
+          axis.text.x = element_blank(),
+          axis.text.y = element_text(size = 24)
+    )
+  print(f1.plot)
+}
+
+
+
+
+
+MCC.graph.cross <- function(NullModelData, CrossData, pos.outcome){
+  
+  random.distribution <- function(randomdata, pos.outcome){
+    output <- data.frame(run = 1:25000,
+                         MCC = NA)
+    
+    for (i in 1:25000) {
+      test_conmat <- confusionMatrix(randomdata[[i]][[1]][[3]],
+                                     positive = pos.outcome)
+      
+      if(pos.outcome == "Toxicity"){
+        TP <- test_conmat$table[2, 2]  # True Positives
+        TN <- test_conmat$table[1, 1]  # True Negatives
+        FP <- test_conmat$table[1, 2]  # False Positives
+        FN <- test_conmat$table[2, 1]  # False Negatives
+      }else{
+        TP <- test_conmat$table[1, 1]  # True Positives
+        TN <- test_conmat$table[2, 2]  # True Negatives
+        FP <- test_conmat$table[2, 1]  # False Positives
+        FN <- test_conmat$table[1, 2]  # False Negatives
+      }
+      
+      output$MCC[i] <-(TP*TN-FP*FN)/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
+      
+      
+    }
+    output[is.na(output)] <- 0
+    output
+  }
+  
+  
+  performance.distribution <- function(data, random, pos.outcome){
+    
+    temp_data2 <- data.frame(run = 1:25,
+                             MCC = NA)
+    
+    for (i in 1:25) {
+      temp_data <- confusionMatrix(data[[i]][[1]][[3]],
+                                   positive = pos.outcome)
+      
+      
+      if(pos.outcome == "Toxicity"){
+        TP <- temp_data$table[2, 2]  # True Positives
+        TN <- temp_data$table[1, 1]  # True Negatives
+        FP <- temp_data$table[1, 2]  # False Positives
+        FN <- temp_data$table[2, 1]  # False Negatives
+      }else{
+        TP <- temp_data$table[1, 1]  # True Positives
+        TN <- temp_data$table[2, 2]  # True Negatives
+        FP <- temp_data$table[2, 1]  # False Positives
+        FN <- temp_data$table[1, 2]  # False Negatives
+      }
+      
+      
+      temp_data2$MCC[i] <-(TP*TN-FP*FN)/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))      
+    }
+    output <- data.frame(run = 1:25,
+                         MCC = NA)
+    
+    for (i in 1:25) {
+      output$MCC[i] <- p.calc(temp_data2$MCC[i], random)
+      
+    }
+    
+    output
+  }
+  
+  
+  #creating data objects
+  leftran <- random.distribution(NullModelData, pos.outcome)
+  
+  left <- as.data.frame((leftran$MCC - min(leftran$MCC)) /
+                          (max(leftran$MCC) - min(leftran$MCC))) 
+  
+  colnames(left)[1] <- "Range"
+  left$Model <- "Null"
+  
+  
+  Crossmodel <- performance.distribution(CrossData, leftran$MCC, pos.outcome)
+  
+  
+  colnames(Crossmodel)[2] <- "Range"
+  Crossmodel$Model <- "modellabel"
+  
+
+  
+  
+  
+  
+  model_list <- list(left, Crossmodel)
+  
+  #merge all data frames in list
+  model_list <- model_list %>% reduce(full_join, by= c('Model', 'Range'))
+  
+  
+  model_order <- c("Null",
+                   "modellabel"
+  )
+  
+  model_list <- model_list %>% replace(is.na(.), 0)
+  
+  model_list$Model <- factor(model_list$Model, levels = model_order)
+  
+  
+  
+  MCC.plot <- ggplot(model_list, aes(x = Model, y = Range, fill = Model)) +
+    geom_boxplot() +
+    scale_fill_manual(values = c("grey63", "snow")) +
+    theme_minimal() +
+    labs(
+      x = NULL,
+      y = NULL
+    ) +
+    theme(legend.position = "none", 
+          axis.text.y = element_text(size = 24),
+          axis.text.x = element_blank()
+    )
+  print(MCC.plot)
+}
 
 
 

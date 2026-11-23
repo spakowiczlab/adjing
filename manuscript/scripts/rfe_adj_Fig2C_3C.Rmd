@@ -1,0 +1,216 @@
+---
+title: "RFE abd LogR"
+author: "Noah Lepola"
+date: "2026-09-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(caret)
+library(randomForest)
+library(tidyverse)
+library(ranger)
+
+
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+
+geneoutcome <- full_join(gene_exp, pt_status)
+
+```
+
+#Adj Rec RFE feature selection
+```{r}
+rec_data <- geneoutcome[, !(names(geneoutcome) %in% "Sample")] %>%
+  filter(Cohort == "Adj_Exp") %>%
+  filter(Reason.for.discontinuation == "Progression" | Reason.for.discontinuation == "Therapy complete") %>%
+  select(-Cohort)
+
+#separating predictors from  Reason.for.discontinuation
+x_vars_rec <- rec_data[, !(names(rec_data) %in% "Reason.for.discontinuation")]
+y_var_rec <- rec_data$Reason.for.discontinuation
+y_var_rec <- as.factor(y_var_rec)
+
+#define the control using random forest functions
+control <- rfeControl(
+  functions = rfFuncs, 
+  method = "cv",  
+  number = 5 
+)
+
+#run the RFE algorithm
+set.seed(43201) 
+rfe_results_rec <- rfe(
+  x = x_vars_rec,
+  y = y_var_rec,
+  sizes = c(1:79),      
+  rfeControl = control
+)
+
+#print summary of the feature selection process
+print(rfe_results_rec)
+
+#view the optimal subset of features chosen by the model
+optimal_features <- predictors(rfe_results_rec)
+print(optimal_features)
+
+
+#plot performance vs. number of features
+ggplot(rfe_results_rec) + 
+  labs(x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18))
+
+
+ggsave("../figures/rf_rec_greedygraph.png", width = 7, height = 7)
+
+
+# Extract the top 13 features directly without updating the model object
+features_size_13 <- rfe_results_rec$control$functions$selectVar(rfe_results_rec$variables, 13)
+print(features_size_13)
+```
+
+#Adj Tox RFE feature selection
+```{r}
+tox_data <- geneoutcome[, !(names(geneoutcome) %in% "Sample")] %>%
+  filter(Cohort == "Adj_Exp") %>%
+  filter(Reason.for.discontinuation == "Toxicity" | Reason.for.discontinuation == "Therapy complete") %>%
+  select(-Cohort)
+
+#separating predictors from  Reason.for.discontinuation
+x_vars_tox <- tox_data[, !(names(tox_data) %in% "Reason.for.discontinuation")]
+y_var_tox <- tox_data$Reason.for.discontinuation
+y_var_tox <- as.factor(y_var_tox)
+
+#define the control using random forest functions
+control <- rfeControl(
+  functions = rfFuncs, 
+  method = "cv",  
+  number = 5   
+)
+
+#run the RFE algorithm
+set.seed(43201) 
+rfe_results_tox <- rfe(
+  x = x_vars_tox,
+  y = y_var_tox,
+  sizes = c(1:79),
+  rfeControl = control
+)
+
+
+#print summary of the feature selection process
+print(rfe_results_tox$results)
+
+#plot performance vs. number of features
+ggplot(rfe_results_tox) + 
+  labs(x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18))
+
+ggsave("../figures/rf_tox_greedygraph.png", width = 7, height = 7)
+
+
+
+#extract the top 6 features directly without updating the model object
+featurestox_size_6 <- rfe_results_tox$control$functions$selectVar(rfe_results_tox$variables, 6)
+print(featurestox_size_6)
+
+```
+
+
+
+#Adj exhaustive rec
+```{r}
+rec_geneoutcome <- geneoutcome %>%
+    filter(Cohort == "Adj_Exp") %>%
+    filter(Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Progression")
+
+#define factors and target variable name
+rec_factors <- c("YWHAZ", "UBC", "GUSB", "VTCN1", "CD276", "CD160", "CD8A",  "CD244", "PGK1",  "PVR")
+target_col <- "Reason.for.discontinuation"
+rec_target <- as.factor(rec_geneoutcome[[target_col]])
+
+#generate all possible non-empty combinations of the 10 factors
+allrec_subsets <- unlist(lapply(1:length(rec_factors), function(k) {
+  combn(rec_factors, k, simplify = FALSE) }), recursive = FALSE)
+
+#make data frame to store results
+rec_results <- data.frame(
+  Model_ID = seq_along(allrec_subsets),
+  Features = sapply(allrec_subsets, paste, collapse = " + "),
+  Num_Features = sapply(allrec_subsets, length),
+  Performance = NA_real_
+)
+
+set.seed(43201)
+for (i in seq_along(allrec_subsets)) {
+  current_vars <- allrec_subsets[[i]]
+  formula_str <- paste(target_col, "~", paste(current_vars, collapse = " + "))
+  
+  fit <- ranger(
+    x = rec_geneoutcome[, current_vars, drop = FALSE],  #predictor subset
+    y = rec_target,
+    num.trees = 100,     
+    verbose = FALSE
+  )
+  
+  #store the OOB error 
+  rec_results$Performance[i] <- fit$prediction.error
+}
+
+#view the top 20 best-performing models (lowest error)
+best_models <- rec_results %>% arrange(Performance)
+head(best_models, 20)
+```
+
+
+#Adj exhaustive tox
+```{r}
+tox_geneoutcome <- geneoutcome %>%
+    filter(Cohort == "Adj_Exp") %>%
+    filter(Reason.for.discontinuation == "Therapy complete" | Reason.for.discontinuation == "Toxicity")
+
+#define factors and target variable name
+tox_factors <- c("IL-2", "CCR4", "NECTIN2", "BCL6", "IL-21", "RUNX3", "AHR", "TGFB1", "B3GAT1", "RORA")
+target_col <- "Reason.for.discontinuation"
+tox_target <- as.factor(tox_geneoutcome[[target_col]])
+
+#generate all possible non-empty combinations of the 10 factors
+alltox_subsets <- unlist(lapply(1:length(tox_factors), function(k) {
+  combn(tox_factors, k, simplify = FALSE) }), recursive = FALSE)
+
+#make data frame to store results
+tox_results <- data.frame(
+  Model_ID = seq_along(alltox_subsets),
+  Features = sapply(alltox_subsets, paste, collapse = " + "),
+  Num_Features = sapply(alltox_subsets, length),
+  Performance = NA_real_
+)
+
+set.seed(43201)
+for (i in seq_along(alltox_subsets)) {
+  current_vars <- alltox_subsets[[i]]
+  formula_str <- paste(target_col, "~", paste(current_vars, collapse = " + "))
+  
+  fit <- ranger(
+    x = tox_geneoutcome[, current_vars, drop = FALSE],  #predictor subset
+    y = tox_target, 
+    num.trees = 100,     
+    verbose = FALSE
+  )
+  
+  #store the OOB error 
+  tox_results$Performance[i] <- fit$prediction.error
+}
+
+#view the top 20 best-performing models (lowest error)
+best_models <- tox_results %>% arrange(Performance)
+head(best_models, 20)
+```
+
+

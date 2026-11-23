@@ -1,0 +1,193 @@
+---
+title: "cross setting comparison Fig6AB FigS2AB"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(caret)
+```
+
+Loading file
+```{r}
+gene_exp <-  readRDS(file = "../Outputs/gene_exp.RData")
+pt_status <-  readRDS(file = "../Outputs/pt_status.RData")
+pt_char <-  readRDS(file = "../Outputs/pt_char.RData")
+
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+met_char <-  readRDS(file = "../Outputs/met_cohort_char.RData")
+
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+#Creating objects for runs
+```{r}
+#joining nanostring and outcomes for both adjuvant and metastatic
+crossover_outcomes <- full_join(pt_status, met_outcomes)
+crossover_data <- full_join(gene_exp, met_data)
+adjtrain_rec_list <- c("VTCN1", "CD276", "CD8A")
+mettrain_pro_list <- c("PTPRC_3")
+#Unshuffled 
+seed_list <- c(12345:12369)
+#Shuffled
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+
+
+adj_null <- full_join(gene_exp, pt_char)
+met_null <- full_join(met_data, met_char)
+nullmodel <- full_join(adj_null, met_null) %>%
+  select(-`Platelets (K/uL)`)
+#no platelets in met data
+null_list <- colnames(nullmodel)[2:length(nullmodel)]
+
+```
+
+
+#Adj rec train meta pro test
+```{r}
+#running predictive model
+rf_rec_adjtrain <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     crossover_outcomes,
+                     crossover_data,
+                     "Adj_Exp",
+                     "Met_Val",
+                     adjtrain_rec_list) 
+
+
+saveRDS(rf_rec_adjtrain, file = "../Outputs/rf_rec_adjtrain.RData")
+
+rf_rec_adjtrain_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        crossover_outcomes,
+                                        nullmodel,
+                                        "Adj_Exp",
+                                        "Met_Val",
+                                        null_list
+)
+
+
+
+
+
+saveRDS(rf_rec_adjtrain_random, file = "../Outputs/rf_rec_adjtrain_random.RData")
+
+
+rec.adjtrain <- met.p.calc(rf_rec_adjtrain_random,
+                        "Progression",
+                       rf_rec_adjtrain)
+
+
+```
+
+
+#Meta train pro Adj test rec
+```{r}
+#running predictive model
+rf_pro_metatrain <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     crossover_outcomes,
+                     crossover_data,
+                     "Met_Exp",
+                     "Adj_Val",
+                     mettrain_pro_list) 
+
+
+saveRDS(rf_pro_metatrain, file = "../Outputs/rf_pro_metatrain.RData")
+
+rf_pro_metatrain_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        crossover_outcomes,
+                                        nullmodel,
+                                        "Met_Exp",
+                                        "Adj_Val",
+                                        null_list
+)
+
+
+
+saveRDS(rf_pro_metatrain_random, file = "../Outputs/rf_pro_metatrain_random.RData")
+
+
+pro_metatrain <- met.p.calc(rf_pro_metatrain_random,
+                        "Progression",
+                       rf_pro_metatrain)
+
+
+```
+
+
+
+
+
+
+
+#loading files
+```{r}
+
+rf_rec_adjtrain_random <-  readRDS(file = "../Outputs/rf_rec_adjtrain_random.RData")
+rf_rec_adjtrain <-  readRDS(file = "../Outputs/rf_rec_adjtrain.RData")
+
+rf_pro_metatrain_random <-  readRDS(file = "../Outputs/rf_pro_metatrain_random.RData")
+rf_pro_metatrain <-  readRDS(file = "../Outputs/rf_pro_metatrain.RData")
+
+```
+
+
+
+#Adj trained Recurrence Fig 6A
+```{r}
+
+f1.graph.cross(rf_rec_adjtrain_random,
+               rf_rec_adjtrain,
+               "Progression")
+
+ggsave("../figures/AdjTrainRecCrossCohortF1.png", width = 5.5, height = 5)
+
+
+MCC.graph.cross(rf_rec_adjtrain_random,
+                rf_rec_adjtrain,
+                "Progression")
+
+ggsave("../figures/AdjTrainRecCrossCohortMCC.png", width = 5.5, height = 5)
+
+```
+
+#Meta trained Pro Fig 6B
+```{r}
+f1.graph.cross(rf_pro_metatrain_random,
+               rf_pro_metatrain,
+               "Progression")
+
+ggsave("../figures/MetTrainRecCrossCohortF1.png", width = 5.5, height = 5)
+
+
+MCC.graph.cross(rf_pro_metatrain_random,
+                rf_pro_metatrain,
+                "Progression")
+
+ggsave("../figures/MetTrainRecCrossCohortMCC.png", width = 5.5, height = 5)
+
+
+```
+

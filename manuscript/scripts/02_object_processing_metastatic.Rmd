@@ -16,8 +16,31 @@ library(openxlsx)
 ##Making clinical object and outcome object
 ```{r}
 #Loading metastatic cohorts
-met_cohort <- readxl::read_xlsx("T:/Labs/Burd/CEBurd Lab/Noah Lepola/Adjuvant Melanoma Paper/Metastatic dis plus val processsing.xlsx", sheet = 1) 
+met_cohort_temp <- readxl::read_xlsx("T:/Labs/Burd/CEBurd Lab/Noah Lepola/Adjuvant Melanoma Paper/Metastatic dis plus val processsing.xlsx", sheet = 1) %>%
+  select(-Cohort)
+```
 
+#Creating randomly divided cohorts
+```{r}
+set.seed(5432)
+#43201 bad
+#1, 123, 1234,12345, 543  imbalanced split
+#5432 first list passes 95 on both
+Met_Exp <- met_cohort_temp %>%
+  group_by(Therapy, Reason.for.discontinuation) %>%
+  slice_sample(prop = 0.6) %>%
+  mutate(Cohort ="Met_Exp")
+
+Met_Val <- anti_join(met_cohort_temp, Met_Exp, by = "Sample")%>%
+  mutate(Cohort ="Met_Val")
+
+
+#Rejoining into one df and dropping treatment
+met_cohort <- full_join(Met_Exp, Met_Val) %>%
+  ungroup() 
+```
+
+```{r}
 #Making outcomes object
 met_cohort_outcomes <- met_cohort %>%
   select(Sample, 
@@ -60,22 +83,22 @@ met_cohort_char <- met_cohort %>%
 ##Gene object and limiting samples to one patients with outcome data
 ```{r}
 #metastatic discovery and validation nanosting objects
-metdisdata <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 4) %>%
+metdataone <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 4) %>%
   drop_na(Sample, ADORA2A) 
 
-metvaldata <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 5) %>%
+metdatatwo <- readxl::read_xlsx("T:/Labs/Spakowicz/mitox/data/Burd_clinicdata/Burd_NanostringSummary_June2022.xlsx", sheet = 5) %>%
   drop_na(Sample, ADORA2A)
 
-metvaldata$Sample <-gsub(" ", "-", metvaldata$Sample)
+metdatatwo$Sample <-gsub(" ", "-", metdatatwo$Sample)
 
-met_dis_data <- metdisdata %>%
+met_one_data <- metdataone %>%
   select(Sample, ADORA2A:YWHAZ)
 
-met_val_data <- metvaldata %>%
+met_two_data <- metdatatwo %>%
   select(Sample, ADORA2A:YWHAZ)
 
 #joining to one object
-metdata <- full_join(met_dis_data, met_val_data)
+metdata <- full_join(met_one_data, met_two_data)
 
 met_cohort_data <- metdata %>%
   select(Sample, ADORA2A:YWHAZ) %>%
@@ -99,13 +122,14 @@ saveRDS(met_cohort_outcomes, file = "../Outputs/met_cohort_outcomes.RData")
 
 
 met_cohort_char <- met_cohort_char %>%
-  filter(Sample %in% met_cohort_data$Sample)
+  filter(Sample %in% met_cohort_data$Sample) %>%
+  select(-Cohort)
 
 #censoring ages 90 or above for anonymity
 #if needed to replicate results, please contact corresponding author to
 #receive uncensored data
 
-met_cohort_char$Age[met_cohort_char$Age >= 90] <- "Censored"
+# met_cohort_char$Age[met_cohort_char$Age >= 90] <- "Censored"
 
 saveRDS(met_cohort_char, file = "../Outputs/met_cohort_char.RData")
 

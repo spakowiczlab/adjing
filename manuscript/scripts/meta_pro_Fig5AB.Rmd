@@ -1,0 +1,273 @@
+---
+title: "meta pro Fig 5ABE"
+author: "Noah Lepola"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(randomForest)
+library(ROCR)
+library(caret)
+
+
+```
+
+Loading file
+```{r}
+met_outcomes <-  readRDS(file = "../Outputs/met_cohort_outcomes.RData")
+met_data <-  readRDS(file = "../Outputs/met_cohort_data.RData")
+met_char <-  readRDS(file = "../Outputs/met_cohort_char.RData")
+
+#note-some ages were censored for deindentification reasons
+#if uncensored ages are needed for verification purposes
+#please contact the corresponding author
+```
+Splitting by cohort and outcome
+
+```{r}
+source("../rf_functions.R")
+```
+
+
+#Creating objects for runs
+```{r}
+full_list <- colnames(met_data)[2:length(met_data)]
+clin_list <- colnames(met_char)[2:length(met_char)]
+bor_list <- c("PTPRC_3", "CEACAM1", "YWHAZ", "C10orf54", "CD27")
+logr_list <- c("PTPRC_3")
+greedy_list <- c("PTPRC_3", "CEACAM1")
+#Unshuffled 
+seed_list <- c(12345:12369)
+#Shuffled
+run_number <- 1:1000
+seed_list_r <- c(12345:13344)
+
+nullmodel <- full_join(met_data, met_char)
+null_list <- colnames(nullmodel)[2:length(nullmodel)]
+```
+
+#Met pro null model
+```{r}
+rf_prometa_nullmodel_random <- shuffled_rf(seed_list,
+                                        "Therapy complete",
+                                        "Progression",
+                                        met_outcomes,
+                                        nullmodel,
+                                        "Met_Exp",
+                                        "Met_Val",
+                                        null_list
+)
+
+
+
+saveRDS(rf_prometa_nullmodel_random, file = "../Outputs/rf_prometa_nullmodel_random.RData")
+
+```
+
+
+
+#Met pro greedy list
+```{r}
+
+ #running predictive model
+ rf_prometa_greedy <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     met_outcomes,
+                     met_data,
+                     "Met_Exp",
+                     "Met_Val",
+                     greedy_list)
+
+
+saveRDS(rf_prometa_greedy, file = "../Outputs/rf_prometa_greedy.RData")
+
+
+
+
+
+rec.greedylist <- met.p.calc(rf_prometa_nullmodel_random,
+                        "Progression",
+                       rf_prometa_greedy)
+
+
+metric_graph(rf_prometa_nullmodel_random,
+             "Progression",
+             rf_prometa_greedy)
+
+```
+
+
+#Met pro logr list
+```{r}
+
+ #running predictive model
+ rf_prometa_logr <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     met_outcomes,
+                     met_data,
+                     "Met_Exp",
+                     "Met_Val",
+                     logr_list)
+
+
+saveRDS(rf_prometa_logr, file = "../Outputs/rf_prometa_logr.RData")
+
+
+rec.logrlist <- met.p.calc(rf_prometa_nullmodel_random,
+                        "Progression",
+                       rf_prometa_logr)
+
+
+metric_graph(rf_prometa_nullmodel_random,
+             "Progression",
+             rf_prometa_logr)
+
+```
+
+
+#Meta pro clinical
+```{r}
+#running predictive model
+rf_prometa_clinical <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     met_outcomes,
+                     met_char,
+                     "Met_Exp",
+                     "Met_Val",
+                     clin_list) 
+
+
+saveRDS(rf_prometa_clinical, file = "../Outputs/rf_prometa_clinical.RData")
+
+
+
+pro.clinical <- met.p.calc(rf_prometa_nullmodel_random,
+                        "Progression",
+                       rf_prometa_clinical)
+
+
+metric_graph(rf_prometa_nullmodel_random,
+             "Progression",
+             rf_prometa_clinical)
+```
+
+
+#Meta pro full panel
+```{r}
+#running predictive model
+rf_prometa_fullpanel <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     met_outcomes,
+                     met_data,
+                     "Met_Exp",
+                     "Met_Val",
+                     full_list) 
+
+
+saveRDS(rf_prometa_fullpanel, file = "../Outputs/rf_prometa_fullpanel.RData")
+
+
+
+pro.fullpanel <- met.p.calc(rf_prometa_nullmodel_random,
+                        "Progression",
+                       rf_prometa_fullpanel)
+
+
+metric_graph(rf_prometa_nullmodel_random,
+             "Progression",
+             rf_prometa_fullpanel)
+```
+
+
+
+
+
+
+#Meta pro boruta
+```{r}
+#running predictive model
+rf_prometa_boruta <- kTest(seed_list,
+                     "Therapy complete",
+                     "Progression",
+                     "Model",
+                     met_outcomes,
+                     met_data,
+                     "Met_Exp",
+                     "Met_Val",
+                     bor_list) 
+
+
+saveRDS(rf_prometa_boruta, file = "../Outputs/rf_prometa_boruta.RData")
+
+
+
+pro.boruta <- met.p.calc(rf_prometa_nullmodel_random,
+                        "Progression",
+                       rf_prometa_boruta)
+
+
+metric_graph(rf_prometa_nullmodel_random,
+             "Progression",
+             rf_prometa_boruta)
+```
+
+
+#loading files
+```{r}
+rf_prometa_nullmodel_random <-  readRDS(file = "../Outputs/rf_prometa_nullmodel_random.RData")
+rf_prometa_clinical <-  readRDS(file = "../Outputs/rf_prometa_clinical.RData")
+rf_prometa_fullpanel <-  readRDS(file = "../Outputs/rf_prometa_fullpanel.RData")
+rf_prometa_boruta <-  readRDS(file = "../Outputs/rf_prometa_boruta.RData")
+rf_prometa_greedy <-  readRDS(file = "../Outputs/rf_prometa_greedy.RData")
+rf_prometa_logr <-  readRDS(file = "../Outputs/rf_prometa_logr.RData")
+
+
+```
+
+
+
+#F1 graph
+```{r}
+f1.graph(rf_prometa_nullmodel_random,
+         rf_prometa_clinical,
+         rf_prometa_fullpanel,
+         rf_prometa_boruta,
+         rf_prometa_greedy, 
+         rf_prometa_logr, 
+         "Progression")
+
+ggsave("../figures/rf_prometa_f1graph.png", width = 12, height = 5)
+
+```
+
+
+
+#MCC graph
+```{r}
+MCC.graph(rf_prometa_nullmodel_random,
+         rf_prometa_clinical,
+         rf_prometa_fullpanel,
+         rf_prometa_boruta,
+         rf_prometa_greedy, 
+         rf_prometa_logr, 
+         "Progression")
+
+ggsave("../figures/rf_prometa_MCCgraph.png", width = 12, height = 5)
+
+```
+
+
+

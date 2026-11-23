@@ -49,8 +49,8 @@ vars <- c("Sex", "Reason.for.discontinuation", "Age", "BMI (kg/m2)", "Platelets 
 ```{r}
 pt_char_status[pt_char_status$Reason.for.discontinuation != "Therapy complete" & pt_char_status$Reason.for.discontinuation != "Toxicity" & pt_char_status$Reason.for.discontinuation != "Progression", "Reason.for.discontinuation"] <- "Other"
 
-pt_char_status[pt_char_status$Cohort == "Adj Validation", "Cohort"] <- "Validation"
-pt_char_status[pt_char_status$Cohort == "Adj", "Cohort"] <- "Exploratory"
+pt_char_status[pt_char_status$Cohort == "Adj_Val", "Cohort"] <- "Validation"
+pt_char_status[pt_char_status$Cohort == "Adj_Exp", "Cohort"] <- "Exploratory"
 
 
 cohort.strat <- CreateTableOne(vars = vars, strata = "Cohort",

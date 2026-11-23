@@ -73,14 +73,53 @@ status_cohort <- subset(temp_status, (Sample %in% pt_char$Sample))
   status_cohort$Reason.for.discontinuation <- gsub( " *\\(.*?\\) *", "", status_cohort$Reason.for.discontinuation)
   status_cohort$Reason.for.discontinuation <- gsub( "^\\s+|\\s+$", "", status_cohort$Reason.for.discontinuation)
 
-pt_status <- status_cohort %>%
+pt_status_temp <- status_cohort %>%
   select(Sample, `Reason.for.discontinuation`, Cohort)
 
-pt_timeline <- (status_cohort)%>%
-  select(Sample, `Reason.for.discontinuation`, Cohort, Duration)
+pt_duration <- (status_cohort)%>%
+  select(Sample, Duration)
 
 
 ```
+
+#Creating randomly divided cohorts
+```{r}
+set.seed(543)
+#mostrecent run 4321 I think
+#interesting seet at 247 .6 split I believe old seed is 54321
+#note seed(1) 50:50 did really well for tox adj
+#64 has good values for rec on full panel
+
+#5432 54 bad split
+
+#1, 123, 1234,12345, 543  tobe tested
+#tested 5432 543 54 5
+#5432 first list passes 95 on both
+
+pt_char_ther <- pt_char %>%
+  select(Sample, Therapy) %>%
+  full_join(pt_status_temp) 
+
+Adj_Exp <- pt_char_ther %>%
+  group_by(Therapy, Reason.for.discontinuation) %>%
+  slice_sample(prop = 0.6) %>%
+  mutate(Cohort ="Adj_Exp")
+
+Adj_Val <- anti_join(pt_char_ther, Adj_Exp, by = "Sample")%>%
+  mutate(Cohort ="Adj_Val")
+
+
+#Rejoining into one df and dropping treatment
+pt_status <- full_join(Adj_Exp, Adj_Val) %>%
+  ungroup() %>%
+  select(Sample, Reason.for.discontinuation, Cohort)
+
+#object for timeline
+pt_timeline <- left_join(pt_status, pt_duration) %>%
+  select(Sample, `Reason.for.discontinuation`, Cohort, Duration)
+
+```
+
 
 
 ```{r}

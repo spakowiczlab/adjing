@@ -58,10 +58,10 @@ timeline$Reason.for.discontinuation <-factor(timeline$Reason.for.discontinuation
                                                         ))
 #Splitting cohorts
 exploratory_timeline <- timeline %>%
-  filter(Cohort == "Adj")
+  filter(Cohort == "Adj_Exp")
 
 validation_timeline <- timeline %>%
-  filter(Cohort == "Adj Validation")
+  filter(Cohort == "Adj_Val")
 
 
 ```
@@ -95,7 +95,7 @@ exploratory_timeline %>%
   ylab("Patients") 
 
 # version with no limits
-ggsave("../Outputs/exploratory_timeline.png", width = 5, height = 7)
+ggsave("../figures/exploratory_timeline.png", width = 5, height = 7)
 
 ```
 
@@ -128,7 +128,7 @@ validation_timeline %>%
   ylab("Patients")
 
 # version with no limits
-ggsave("../Outputs/validation_timeline.png", width = 5, height = 7)
+ggsave("../figures/validation_timeline.png", width = 5, height = 7)
 
 ```
 
